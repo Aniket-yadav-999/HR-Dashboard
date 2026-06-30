@@ -1,0 +1,60 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Build frontend
+        run: npm run build --prefix frontend
+
+      - name: Validate backend entrypoint
+        run: node --check backend/src/server.js
+
+  deploy:
+    name: Deployment Hook
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+
+    steps:
+      - name: Trigger configured deployment
+        if: env.DEPLOY_HOOK_URL != ''
+        run: curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+      - name: Deployment not configured
+        if: env.DEPLOY_HOOK_URL == ''
+        run: echo "Set DEPLOY_HOOK_URL in repository secrets to enable automatic deployment."
