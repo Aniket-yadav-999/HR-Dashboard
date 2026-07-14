@@ -47,7 +47,12 @@ router.post("/login", async (req, res, next) => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000)
     });
 
-    await sendOtpEmail({ to: user.email, otp, name: user.name });
+    try {
+      await sendOtpEmail({ to: user.email, otp, name: user.name });
+    } catch (error) {
+      await OtpChallenge.deleteOne({ _id: challenge._id });
+      throw error;
+    }
 
     res.json({
       challengeId: challenge._id,
@@ -110,9 +115,6 @@ router.post("/resend-otp", async (req, res, next) => {
       return res.status(404).json({ message: "OTP challenge not found" });
     }
 
-    existingChallenge.usedAt = new Date();
-    await existingChallenge.save();
-
     const otp = generateOtp();
     const challenge = await OtpChallenge.create({
       user: existingChallenge.user._id,
@@ -120,7 +122,15 @@ router.post("/resend-otp", async (req, res, next) => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000)
     });
 
-    await sendOtpEmail({ to: existingChallenge.user.email, otp, name: existingChallenge.user.name });
+    try {
+      await sendOtpEmail({ to: existingChallenge.user.email, otp, name: existingChallenge.user.name });
+    } catch (error) {
+      await OtpChallenge.deleteOne({ _id: challenge._id });
+      throw error;
+    }
+
+    existingChallenge.usedAt = new Date();
+    await existingChallenge.save();
 
     res.json({
       challengeId: challenge._id,

@@ -23,7 +23,7 @@ npm run install:all
 copy backend\.env.example backend\.env
 ```
 
-3. Update `backend/.env` with your MongoDB URI, email settings, JWT secret, and client URL.
+3. Update `backend/.env` with your MongoDB URI, email settings, JWT secret, and frontend URLs. `CLIENT_URLS` accepts comma-separated URLs, so local and deployed frontends can both be enabled.
 
 4. Start the full development stack:
 
@@ -33,6 +33,8 @@ npm run dev
 
 Backend runs on `http://localhost:5000`.
 Frontend runs on `http://localhost:5173`.
+
+The frontend uses `/api` by default. Vite proxies that path to the local backend during development, while `frontend/vercel.json` rewrites it to the Render backend in production. You can instead set `VITE_API_URL` (including the `/api` suffix) when deploying the frontend to another provider.
 
 ## Production Build
 
