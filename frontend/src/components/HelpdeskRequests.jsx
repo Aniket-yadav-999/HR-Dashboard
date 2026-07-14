@@ -180,56 +180,59 @@ function HelpdeskRequests({ currentUser, onChanged }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[#064b36] text-xs uppercase tracking-widest text-white">
-                <tr>
-                  <th className="px-4 py-4 font-black">Request</th>
-                  <th className="px-4 py-4 font-black">Requester</th>
-                  <th className="px-4 py-4 font-black">Priority</th>
-                  <th className="px-4 py-4 font-black">Status</th>
-                  <th className="px-4 py-4 font-black">Updated</th>
-                  {canManage ? <th className="px-4 py-4 font-black">Manage</th> : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {visibleTickets.map((ticket) => (
-                  <tr key={ticket.id} className="transition hover:bg-[#eff6df]">
-                    <td className="px-4 py-4">
-                      <p className="font-black text-[#15372b]">{ticket.subject}</p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{ticket.description}</p>
-                      {ticket.resolutionNote ? <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Admin note: {ticket.resolutionNote}</p> : null}
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">{ticket.requester?.name || "User"}</td>
-                    <td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black ${priorityClass(ticket.priority)}`}>{ticket.priorityLabel}</span></td>
-                    <td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(ticket.status)}`}>{ticket.statusLabel}</span></td>
-                    <td className="whitespace-nowrap px-4 py-4 text-xs font-bold text-slate-500">{new Date(ticket.updatedAt).toLocaleString("en-IN")}</td>
-                    {canManage ? (
-                      <td className="px-4 py-4">
-                        <div className="flex min-w-52 flex-col gap-2">
-                          <select className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none" value={ticket.status} onChange={(event) => updateTicket(ticket, { status: event.target.value })}>
-                            {statuses.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
-                          </select>
-                          <input className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none" placeholder="Resolution note" onKeyDown={(event) => {
-                            if (event.key === "Enter" && event.currentTarget.value.trim()) {
-                              updateTicket(ticket, { resolutionNote: event.currentTarget.value });
-                              event.currentTarget.value = "";
-                            }
-                          }} />
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-                {!visibleTickets.length ? (
-                  <tr>
-                    <td className="px-5 py-10 text-center text-sm font-bold text-slate-500" colSpan={canManage ? 6 : 5}>
-                      No helpdesk requests found.
-                    </td>
-                  </tr>
+          <div className="space-y-4 bg-[#f7f9f5] p-4 sm:p-5">
+            {visibleTickets.map((ticket) => (
+              <article key={ticket.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[#eaf4dc] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#064b36]">{titleCase(ticket.category)}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${priorityClass(ticket.priority)}`}>{ticket.priorityLabel}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${statusClass(ticket.status)}`}>{ticket.statusLabel}</span>
+                    </div>
+                    <h3 className="mt-3 text-base font-black leading-6 text-[#15372b]">{ticket.subject}</h3>
+                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">{ticket.description}</p>
+                  </div>
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-xs font-black text-slate-700">{ticket.requester?.name || "User"}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-400">Updated {new Date(ticket.updatedAt).toLocaleString("en-IN")}</p>
+                  </div>
+                </div>
+
+                {ticket.resolutionNote ? (
+                  <div className="mx-4 mt-4 flex gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs leading-5 text-emerald-800 sm:mx-5">
+                    <ShieldCheck size={17} className="mt-0.5 shrink-0" />
+                    <p><span className="font-black">Admin note:</span> {ticket.resolutionNote}</p>
+                  </div>
                 ) : null}
-              </tbody>
-            </table>
+
+                {canManage ? (
+                  <div className="grid gap-3 p-4 sm:grid-cols-[minmax(150px,0.35fr)_1fr] sm:p-5">
+                    <label>
+                      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-400">Status</span>
+                      <select className="w-full rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-2.5 text-xs font-bold text-[#15372b] outline-none focus:border-[#064b36]" value={ticket.status} onChange={(event) => updateTicket(ticket, { status: event.target.value })}>
+                        {statuses.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-400">Add resolution note and press Enter</span>
+                      <input className="w-full rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-2.5 text-xs font-bold text-[#15372b] outline-none placeholder:text-slate-400 focus:border-[#064b36]" placeholder="Write a clear update for the requester..." onKeyDown={(event) => {
+                        if (event.key === "Enter" && event.currentTarget.value.trim()) {
+                          updateTicket(ticket, { resolutionNote: event.currentTarget.value.trim() });
+                          event.currentTarget.value = "";
+                        }
+                      }} />
+                    </label>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+            {!visibleTickets.length ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center">
+                <Headphones size={28} className="mx-auto text-slate-300" />
+                <p className="mt-3 text-sm font-bold text-slate-500">No helpdesk requests found.</p>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
