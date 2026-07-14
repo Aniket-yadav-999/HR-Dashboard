@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { OtpChallenge } from "../models/OtpChallenge.js";
 import { Session } from "../models/Session.js";
 import { User } from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -41,21 +40,14 @@ router.post("/login", async (req, res, next) => {
     }
 
     const otp = generateOtp();
-    const challenge = await OtpChallenge.create({
-      user: user._id,
-      otpHash: hashOtp(otp),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000)
-    });
+    await sendOtpEmail({ to: user.email, otp, name: user.name });
 
-    try {
-      await sendOtpEmail({ to: user.email, otp, name: user.name });
-    } catch (error) {
-      await OtpChallenge.deleteOne({ _id: challenge._id });
-      throw error;
-    }
+    user.loginOtpHash = hashOtp(otp);
+    user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await user.save();
 
     res.json({
-      challengeId: challenge._id,
+      challengeId: user._id,
       message: "OTP sent to registered email",
       devOtp: process.env.NODE_ENV === "production" ? undefined : otp
     });
@@ -72,27 +64,28 @@ router.post("/verify-otp", async (req, res, next) => {
       return res.status(400).json({ message: "Challenge and OTP are required" });
     }
 
-    const challenge = await OtpChallenge.findOne({
+    const user = await User.findOne({
       _id: challengeId,
-      usedAt: { $exists: false },
-      expiresAt: { $gt: new Date() }
-    }).populate("user");
+      status: { $ne: "exited" },
+      loginOtpExpiresAt: { $gt: new Date() }
+    }).select("+loginOtpHash +loginOtpExpiresAt");
 
-    if (!challenge || challenge.otpHash !== hashOtp(otp)) {
+    if (!user || user.loginOtpHash !== hashOtp(otp)) {
       return res.status(401).json({ message: "Invalid or expired OTP" });
     }
 
-    challenge.usedAt = new Date();
-    await challenge.save();
+    user.loginOtpHash = undefined;
+    user.loginOtpExpiresAt = undefined;
+    await user.save();
 
     const token = generateToken();
     await Session.create({
-      user: challenge.user._id,
+      user: user._id,
       token,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
 
-    res.json({ token, user: publicUser(challenge.user) });
+    res.json({ token, user: publicUser(user) });
   } catch (error) {
     next(error);
   }
@@ -106,34 +99,24 @@ router.post("/resend-otp", async (req, res, next) => {
       return res.status(400).json({ message: "Challenge is required" });
     }
 
-    const existingChallenge = await OtpChallenge.findOne({
+    const user = await User.findOne({
       _id: challengeId,
-      usedAt: { $exists: false }
-    }).populate("user");
+      status: { $ne: "exited" }
+    });
 
-    if (!existingChallenge || !existingChallenge.user) {
+    if (!user) {
       return res.status(404).json({ message: "OTP challenge not found" });
     }
 
     const otp = generateOtp();
-    const challenge = await OtpChallenge.create({
-      user: existingChallenge.user._id,
-      otpHash: hashOtp(otp),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000)
-    });
+    await sendOtpEmail({ to: user.email, otp, name: user.name });
 
-    try {
-      await sendOtpEmail({ to: existingChallenge.user.email, otp, name: existingChallenge.user.name });
-    } catch (error) {
-      await OtpChallenge.deleteOne({ _id: challenge._id });
-      throw error;
-    }
-
-    existingChallenge.usedAt = new Date();
-    await existingChallenge.save();
+    user.loginOtpHash = hashOtp(otp);
+    user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await user.save();
 
     res.json({
-      challengeId: challenge._id,
+      challengeId: user._id,
       message: "A new OTP has been sent",
       devOtp: process.env.NODE_ENV === "production" ? undefined : otp
     });

@@ -18,6 +18,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    loginOtpHash: {
+      type: String,
+      select: false
+    },
+    loginOtpExpiresAt: {
+      type: Date,
+      select: false
+    },
     role: {
       type: String,
       enum: ["admin", "hr", "manager", "employee"],
