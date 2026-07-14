@@ -36,6 +36,8 @@ Frontend runs on `http://localhost:5173`.
 
 The frontend uses `/api` by default. Vite proxies that path to the local backend during development, while `frontend/vercel.json` rewrites it to the Render backend in production. You can instead set `VITE_API_URL` (including the `/api` suffix) when deploying the frontend to another provider.
 
+The Render deployment uses Brevo SMTP on port `2525`. Render free services block the standard SMTP ports `25`, `465`, and `587`; Brevo supports `2525` as the fallback submission port.
+
 ## Production Build
 
 ```bash

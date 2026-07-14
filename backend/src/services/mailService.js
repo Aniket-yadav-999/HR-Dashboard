@@ -8,7 +8,11 @@ function getTransporter() {
   }
 
   const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
+  const configuredPort = Number(process.env.SMTP_PORT || 587);
+  const isBrevoRelay = /(^|\.)brevo\.com$/i.test(host || "");
+  const port = process.env.NODE_ENV === "production" && isBrevoRelay && configuredPort === 587
+    ? 2525
+    : configuredPort;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
@@ -28,6 +32,8 @@ function getTransporter() {
       pass
     }
   });
+
+  console.log(`SMTP transport configured on port ${port}`);
 
   return transporter;
 }
