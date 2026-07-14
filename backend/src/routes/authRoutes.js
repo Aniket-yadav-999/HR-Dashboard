@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Session } from "../models/Session.js";
 import { User } from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
+import { scheduleOtpCleanup } from "../services/otpCleanup.js";
 import { sendOtpEmail } from "../services/mailService.js";
 import { generateOtp, generateToken, hashOtp, verifyPassword } from "../utils/password.js";
 
@@ -40,16 +41,24 @@ router.post("/login", async (req, res, next) => {
     }
 
     const otp = generateOtp();
-    await sendOtpEmail({ to: user.email, otp, name: user.name });
+    let emailQueued = true;
+    try {
+      await sendOtpEmail({ to: user.email, otp, name: user.name });
+    } catch {
+      emailQueued = false;
+    }
 
     user.loginOtpHash = hashOtp(otp);
     user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
+    scheduleOtpCleanup(user._id, user.loginOtpExpiresAt);
 
     res.json({
       challengeId: user._id,
-      message: "OTP sent to registered email",
-      devOtp: process.env.NODE_ENV === "production" ? undefined : otp
+      message: emailQueued ? "OTP sent to registered email" : "OTP generated; email delivery is temporarily unavailable",
+      displayOtp: otp,
+      otpExpiresAt: user.loginOtpExpiresAt,
+      emailQueued
     });
   } catch (error) {
     next(error);
@@ -109,16 +118,24 @@ router.post("/resend-otp", async (req, res, next) => {
     }
 
     const otp = generateOtp();
-    await sendOtpEmail({ to: user.email, otp, name: user.name });
+    let emailQueued = true;
+    try {
+      await sendOtpEmail({ to: user.email, otp, name: user.name });
+    } catch {
+      emailQueued = false;
+    }
 
     user.loginOtpHash = hashOtp(otp);
     user.loginOtpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await user.save();
+    scheduleOtpCleanup(user._id, user.loginOtpExpiresAt);
 
     res.json({
       challengeId: user._id,
-      message: "A new OTP has been sent",
-      devOtp: process.env.NODE_ENV === "production" ? undefined : otp
+      message: emailQueued ? "A new OTP has been sent" : "A new OTP was generated; email delivery is temporarily unavailable",
+      displayOtp: otp,
+      otpExpiresAt: user.loginOtpExpiresAt,
+      emailQueued
     });
   } catch (error) {
     next(error);

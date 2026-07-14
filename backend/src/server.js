@@ -13,6 +13,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import { seedAdmin } from "./services/seedAdmin.js";
+import { startOtpCleanupJob } from "./services/otpCleanup.js";
 
 dotenv.config();
 
@@ -70,6 +71,7 @@ app.use((err, _req, res, _next) => {
 connectDB()
   .then(seedAdmin)
   .then(() => {
+    startOtpCleanupJob();
     app.listen(port, () => {
       console.log(`Backend running on http://localhost:${port}`);
     });

@@ -1,5 +1,5 @@
 import { KeyRound, Mail, RefreshCw, ShieldCheck, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestLogin, resendOtp, verifyOtp } from "../services/api";
 
 const logoUrl = "https://aagarg.in/wp-content/uploads/2025/05/A2G-New-Logo-Black.avif";
@@ -8,11 +8,31 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
   const [step, setStep] = useState("credentials");
   const [form, setForm] = useState({ email: "Aniket.Yadav@aagarg.in", password: "", otp: "" });
   const [challengeId, setChallengeId] = useState("");
-  const [devOtp, setDevOtp] = useState("");
+  const [displayOtp, setDisplayOtp] = useState("");
+  const [otpExpiresAt, setOtpExpiresAt] = useState("");
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const otpRefs = useRef([]);
+
+  useEffect(() => {
+    if (!otpExpiresAt) {
+      return undefined;
+    }
+
+    function updateCountdown() {
+      const remaining = Math.max(Math.ceil((new Date(otpExpiresAt).getTime() - Date.now()) / 1000), 0);
+      setSecondsRemaining(remaining);
+      if (remaining === 0) {
+        setDisplayOtp("");
+      }
+    }
+
+    updateCountdown();
+    const interval = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(interval);
+  }, [otpExpiresAt]);
 
   function updateOtp(index, value) {
     const digit = value.replace(/\D/g, "").slice(-1);
@@ -40,7 +60,8 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
     try {
       const data = await requestLogin({ email: form.email, password: form.password });
       setChallengeId(data.challengeId);
-      setDevOtp(data.devOtp || "");
+      setDisplayOtp(data.displayOtp || "");
+      setOtpExpiresAt(data.otpExpiresAt || "");
       setForm((current) => ({ ...current, otp: "" }));
       setStep("otp");
     } catch (requestError) {
@@ -57,7 +78,8 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
     try {
       const data = await resendOtp({ challengeId });
       setChallengeId(data.challengeId);
-      setDevOtp(data.devOtp || "");
+      setDisplayOtp(data.displayOtp || "");
+      setOtpExpiresAt(data.otpExpiresAt || "");
       setForm((current) => ({ ...current, otp: "" }));
       otpRefs.current[0]?.focus();
     } catch (requestError) {
@@ -131,9 +153,11 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
             </div>
 
             {error ? <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</div> : null}
-            {devOtp ? (
-              <div className="mb-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                Dev OTP: <span className="font-semibold">{devOtp}</span>
+            {step === "otp" && displayOtp ? (
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-900">
+                <span className="font-semibold">Your login OTP: </span>
+                <span className="text-lg font-black tracking-[0.25em]">{displayOtp}</span>
+                <span className="ml-2 text-xs text-emerald-700">({Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, "0")})</span>
               </div>
             ) : null}
 
