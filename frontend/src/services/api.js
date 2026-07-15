@@ -46,6 +46,11 @@ export async function getUsers() {
   return response.data;
 }
 
+export async function getOverviewUsers() {
+  const response = await api.get("/users/overview");
+  return response.data;
+}
+
 export async function createUser(payload) {
   const response = await api.post("/users", payload);
   return response.data;

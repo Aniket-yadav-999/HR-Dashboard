@@ -22,7 +22,10 @@ function StatCard({ title, value, icon: Icon, helper, color }) {
 function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
   const stats = getEmployeeStats(users);
   const recentJoiners = [...users].sort((first, second) => new Date(second.joinedAt) - new Date(first.joinedAt)).slice(0, 5);
-  const exits = users.filter((user) => user.status === "exited").slice(0, 5);
+  const exits = users
+    .filter((user) => user.status === "exited")
+    .sort((first, second) => new Date(second.exitedAt || second.joinedAt) - new Date(first.exitedAt || first.joinedAt))
+    .slice(0, 5);
   const activeRate = stats.total ? Math.round((stats.active / stats.total) * 100) : 0;
   const canManageUsers = ["admin", "hr"].includes(currentUser?.role);
 
@@ -47,7 +50,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
             <div>
               <h3 className="text-xl font-black text-[#15372b]">Employee Directory</h3>
-              <p className="mt-1 text-sm text-slate-500">Latest users created by admin panel.</p>
+              <p className="mt-1 text-sm text-slate-500">Organization-wide employee directory.</p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eff6df] text-[#064b36]">
               <BriefcaseBusiness size={22} />

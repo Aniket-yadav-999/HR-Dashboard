@@ -26,6 +26,21 @@ function toUserCard(user) {
   };
 }
 
+function toOverviewUserCard(user) {
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    department: user.department,
+    designation: user.designation,
+    joinedAt: user.joinedAt,
+    exitedAt: user.exitedAt,
+    avatarColor: user.avatarColor
+  };
+}
+
 function visibleUserFilter(user) {
   if (["admin", "hr"].includes(user.role)) {
     return {};
@@ -68,6 +83,15 @@ router.get("/", requireAuth, async (req, res, next) => {
   try {
     const users = await User.find(visibleUserFilter(req.user)).sort({ joinedAt: -1 });
     res.json(users.map(toUserCard));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/overview", requireAuth, async (req, res, next) => {
+  try {
+    const users = await User.find({}).sort({ joinedAt: -1 });
+    res.json(users.map(toOverviewUserCard));
   } catch (error) {
     next(error);
   }

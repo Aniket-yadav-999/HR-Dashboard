@@ -13,11 +13,12 @@ import OrganizationTree from "./components/OrganizationTree";
 import ReportsAnalytics from "./components/ReportsAnalytics";
 import Sidebar from "./components/Sidebar";
 import TopNavbar from "./components/TopNavbar";
-import { deleteUser, getNotifications, getProfile, getUsers, logout } from "./services/api";
+import { deleteUser, getNotifications, getOverviewUsers, getProfile, getUsers, logout } from "./services/api";
 
 function App() {
   const [user, setUser] = useState(null);
   const [users, setUsers] = useState([]);
+  const [overviewUsers, setOverviewUsers] = useState([]);
   const [loginOpen, setLoginOpen] = useState(false);
   const [createEmployeeOpen, setCreateEmployeeOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -33,8 +34,9 @@ function App() {
     setError("");
 
     try {
-      const data = await getUsers();
-      setUsers(data);
+      const [visibleUsers, organizationUsers] = await Promise.all([getUsers(), getOverviewUsers()]);
+      setUsers(visibleUsers);
+      setOverviewUsers(organizationUsers);
     } catch (requestError) {
       setError(requestError.response?.data?.message || "Could not load employees");
     } finally {
@@ -91,15 +93,18 @@ function App() {
     localStorage.removeItem("a2g_token");
     setUser(null);
     setUsers([]);
+    setOverviewUsers([]);
     setNotifications([]);
   }
 
   function handleUserCreated(createdUser) {
     setUsers((current) => [createdUser, ...current]);
+    setOverviewUsers((current) => [createdUser, ...current]);
   }
 
   function handleUserUpdated(updatedUser) {
     setUsers((current) => current.map((item) => (item.id === updatedUser.id ? updatedUser : item)));
+    setOverviewUsers((current) => current.map((item) => (item.id === updatedUser.id ? updatedUser : item)));
     setEditingUser(null);
   }
 
@@ -112,6 +117,7 @@ function App() {
 
     await deleteUser(userToDelete.id);
     setUsers((current) => current.filter((item) => item.id !== userToDelete.id));
+    setOverviewUsers((current) => current.filter((item) => item.id !== userToDelete.id));
   }
 
   if (loading) {
@@ -197,10 +203,10 @@ function App() {
 
               {activeView === "overview" ? (
                 <EmployeeOverview
-                  users={users}
+                  users={overviewUsers}
                   currentUser={user}
                   onEditUser={(selectedUser) => {
-                    setEditingUser(selectedUser);
+                    setEditingUser(users.find((item) => item.id === selectedUser.id) || selectedUser);
                     setCreateEmployeeOpen(true);
                   }}
                   onDeleteUser={handleDeleteUser}
