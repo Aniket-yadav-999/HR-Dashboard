@@ -91,6 +91,11 @@ export async function updateHoliday(id, payload) {
   return response.data;
 }
 
+export async function deleteHoliday(id) {
+  const response = await api.delete(`/holidays/${id}`);
+  return response.data;
+}
+
 export async function getEngagementItems() {
   const response = await api.get("/engagement");
   return response.data;

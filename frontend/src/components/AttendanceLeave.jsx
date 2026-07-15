@@ -14,10 +14,11 @@ import {
   Save,
   Send,
   Sparkles,
+  Trash2,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { createAttendance, createHoliday, getAttendance, getHolidays, updateHoliday } from "../services/api";
+import { createAttendance, createHoliday, deleteHoliday, getAttendance, getHolidays, updateHoliday } from "../services/api";
 
 const options = [
   { value: "present", label: "Present", tone: "from-emerald-700 to-lime-400", chip: "bg-emerald-50 text-emerald-700" },
@@ -265,9 +266,10 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   const [holidays, setHolidays] = useState([]);
   const [holidayMessage, setHolidayMessage] = useState("");
   const [holidaySaving, setHolidaySaving] = useState(false);
+  const [deletingHolidayId, setDeletingHolidayId] = useState("");
   const [editingHolidayId, setEditingHolidayId] = useState("");
   const [holidayForm, setHolidayForm] = useState({ name: "", date: "", day: "", imageKey: "" });
-  const [leaveSummaryScope, setLeaveSummaryScope] = useState("team");
+  const [leaveSummaryScope, setLeaveSummaryScope] = useState(["admin", "hr"].includes(user.role) ? "all" : user.role === "manager" ? "team" : "me");
 
   const today = new Date();
   const todayKey = today.toISOString().slice(0, 10);
@@ -282,7 +284,10 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
     () => buildLeaveSummaries({ records, users, currentUser: user, year: currentYear }),
     [records, users, user, currentYear]
   );
-  const scopedLeaveSummaries = user.role === "manager" && leaveSummaryScope === "me" ? leaveSummaries.filter((person) => person.email === user.email) : leaveSummaries;
+  const scopedLeaveSummaries = leaveSummaryScope === "me" ? leaveSummaries.filter((person) => person.email === user.email) : leaveSummaries;
+  const leaveScopeOptions = ["admin", "hr"].includes(user.role)
+    ? [["me", "Me"], ["all", "All"]]
+    : [["me", "Me"], ["team", "Team"]];
   const totalPaidUsed = scopedLeaveSummaries.reduce((total, person) => total + person.paidUsed, 0);
   const totalSickUsed = scopedLeaveSummaries.reduce((total, person) => total + person.sickUsed, 0);
   const totalPaidBalance = scopedLeaveSummaries.reduce((total, person) => total + person.paidBalance, 0);
@@ -395,6 +400,30 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
     }
   }
 
+  async function removeHoliday(holiday) {
+    if (!window.confirm(`Delete ${holiday.name} from the holiday calendar?`)) {
+      return;
+    }
+
+    setDeletingHolidayId(holiday.id);
+    setHolidayMessage("");
+
+    try {
+      await deleteHoliday(holiday.id);
+
+      if (editingHolidayId === holiday.id) {
+        resetHolidayForm();
+      }
+
+      setHolidayMessage("Holiday deleted.");
+      await loadHolidays();
+    } catch (error) {
+      setHolidayMessage(error.response?.data?.message || "Could not delete holiday.");
+    } finally {
+      setDeletingHolidayId("");
+    }
+  }
+
   async function submitAttendance(typeOverride = selectedType) {
     if (!typeOverride) {
       setMessage("Please select an attendance option.");
@@ -464,8 +493,9 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
 
       <LeaveSummary
         currentYear={currentYear}
-        canToggleScope={user.role === "manager"}
+        canToggleScope={["admin", "hr", "manager"].includes(user.role)}
         scope={leaveSummaryScope}
+        scopeOptions={leaveScopeOptions}
         onScopeChange={setLeaveSummaryScope}
         summaries={scopedLeaveSummaries}
         totalPaidBalance={totalPaidBalance}
@@ -543,9 +573,11 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
               holidayForm={holidayForm}
               holidayMessage={holidayMessage}
               holidaySaving={holidaySaving}
+              deletingHolidayId={deletingHolidayId}
               holidays={holidays}
               nextHoliday={nextHoliday}
               onEdit={startHolidayEdit}
+              onDelete={removeHoliday}
               onFormChange={updateHolidayForm}
               onReset={resetHolidayForm}
               onSave={saveHoliday}
@@ -735,7 +767,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   );
 }
 
-function LeaveSummary({ canToggleScope = false, currentYear, onScopeChange, scope = "team", summaries, totalPaidBalance, totalPaidUsed, totalSickBalance, totalSickUsed }) {
+function LeaveSummary({ canToggleScope = false, currentYear, onScopeChange, scope = "team", scopeOptions = [["me", "Me"], ["team", "Team"]], summaries, totalPaidBalance, totalPaidUsed, totalSickBalance, totalSickUsed }) {
   const peopleCount = Math.max(1, summaries.length);
   const paidCapacity = peopleCount * leaveEntitlements.paid_leave;
   const sickCapacity = peopleCount * leaveEntitlements.sick_leave;
@@ -788,10 +820,7 @@ function LeaveSummary({ canToggleScope = false, currentYear, onScopeChange, scop
             <div className="flex items-center gap-2">
               {canToggleScope ? (
                 <div className="rounded-full bg-[#eff6df] p-1">
-                  {[
-                    ["me", "Me"],
-                    ["team", "Team"]
-                  ].map(([value, label]) => (
+                  {scopeOptions.map(([value, label]) => (
                     <button
                       key={value}
                       onClick={() => onScopeChange(value)}
@@ -887,12 +916,14 @@ function LeaveMiniBar({ balance, danger = false, limit, used }) {
 
 function HolidaySpotlight({
   canManage,
+  deletingHolidayId,
   editingHolidayId,
   holidayForm,
   holidayMessage,
   holidaySaving,
   holidays,
   nextHoliday,
+  onDelete,
   onEdit,
   onFormChange,
   onReset,
@@ -903,6 +934,10 @@ function HolidaySpotlight({
   const totalPages = Math.max(1, Math.ceil(holidays.length / pageSize));
   const pageStart = (page - 1) * pageSize;
   const visibleHolidays = holidays.slice(pageStart, pageStart + pageSize);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   function goToPage(nextPage) {
     setPage(Math.min(totalPages, Math.max(1, nextPage)));
@@ -1004,9 +1039,21 @@ function HolidaySpotlight({
                   <p className="text-xs text-slate-500">{formatHolidayDate(holiday.date)}</p>
                 </div>
                 {canManage ? (
-                  <button onClick={() => onEdit(holiday)} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-[#064b36]" type="button" title="Edit holiday">
-                    <Edit3 size={15} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => onEdit(holiday)} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-[#064b36]" type="button" title="Edit holiday" aria-label={`Edit ${holiday.name}`}>
+                      <Edit3 size={15} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(holiday)}
+                      disabled={deletingHolidayId === holiday.id}
+                      className="rounded-lg border border-rose-100 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      type="button"
+                      title="Delete holiday"
+                      aria-label={`Delete ${holiday.name}`}
+                    >
+                      {deletingHolidayId === holiday.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                    </button>
+                  </div>
                 ) : null}
               </div>
             ))}

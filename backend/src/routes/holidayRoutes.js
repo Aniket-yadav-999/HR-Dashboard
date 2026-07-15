@@ -103,4 +103,18 @@ router.put("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
   }
 });
 
+router.delete("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
+  try {
+    const holiday = await Holiday.findByIdAndDelete(req.params.id);
+
+    if (!holiday) {
+      return res.status(404).json({ message: "Holiday not found" });
+    }
+
+    res.json({ message: "Holiday deleted" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
