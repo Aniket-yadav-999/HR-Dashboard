@@ -7,10 +7,16 @@ const assetSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
-    assetTag: {
+    assetId: {
       type: String,
       required: true,
       unique: true,
+      sparse: true,
+      trim: true
+    },
+    // Kept for records created before assetId was introduced.
+    assetTag: {
+      type: String,
       trim: true
     },
     category: {
@@ -27,6 +33,26 @@ const assetSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User"
     },
+    brandModel: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    serialNumber: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    department: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    location: {
+      type: String,
+      default: "",
+      trim: true
+    },
     issuedAt: {
       type: Date
     },
@@ -39,6 +65,11 @@ const assetSchema = new mongoose.Schema(
       default: "good"
     },
     notes: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    ipAddress: {
       type: String,
       default: "",
       trim: true

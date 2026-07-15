@@ -19,8 +19,9 @@ function labelFor(value) {
 function toAsset(asset) {
   return {
     id: asset._id,
+    assetId: asset.assetId || asset.assetTag,
     name: asset.name,
-    assetTag: asset.assetTag,
+    assetTag: asset.assetId || asset.assetTag,
     category: asset.category,
     categoryLabel: labelFor(asset.category),
     status: asset.status,
@@ -29,6 +30,11 @@ function toAsset(asset) {
     conditionLabel: labelFor(asset.condition),
     issuedAt: asset.issuedAt,
     returnedAt: asset.returnedAt,
+    brandModel: asset.brandModel,
+    serialNumber: asset.serialNumber,
+    department: asset.department || asset.assignedTo?.department || "",
+    location: asset.location,
+    ipAddress: asset.ipAddress,
     notes: asset.notes,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
@@ -46,19 +52,27 @@ function toAsset(asset) {
 }
 
 function buildPayload(body) {
+  const assetId = (body.assetId || body.assetTag)?.trim();
   const payload = {
     name: body.name?.trim(),
-    assetTag: body.assetTag?.trim(),
+    assetId,
+    // Mirror the ID until the legacy assetTag database index is removed.
+    assetTag: assetId,
     category: categories.includes(body.category) ? body.category : "laptop",
     status: statuses.includes(body.status) ? body.status : "available",
     condition: conditions.includes(body.condition) ? body.condition : "good",
+    brandModel: body.brandModel?.trim() || "",
+    serialNumber: body.serialNumber?.trim() || "",
+    department: body.department?.trim() || "",
+    location: body.location?.trim() || "",
+    ipAddress: body.ipAddress?.trim() || "",
     notes: body.notes?.trim() || "",
     issuedAt: body.issuedAt ? new Date(body.issuedAt) : undefined,
     returnedAt: body.returnedAt ? new Date(body.returnedAt) : undefined
   };
 
-  if (!payload.name || !payload.assetTag) {
-    throw new Error("Asset name and tag are required");
+  if (!payload.name || !payload.assetId) {
+    throw new Error("Asset ID and name are required");
   }
 
   return payload;
@@ -114,13 +128,16 @@ router.post("/", requireAuth, requireHrOrAdmin, async (req, res, next) => {
     const payload = buildPayload(req.body);
     const assignedTo = req.body.assignedTo ? await User.findById(req.body.assignedTo) : null;
 
-    const exists = await Asset.exists({ assetTag: payload.assetTag });
+    const exists = await Asset.exists({
+      $or: [{ assetId: payload.assetId }, { assetTag: payload.assetId }]
+    });
     if (exists) {
-      return res.status(409).json({ message: "Asset tag already exists" });
+      return res.status(409).json({ message: "Asset ID already exists" });
     }
 
     const asset = await Asset.create({
       ...payload,
+      department: payload.department || assignedTo?.department || "",
       assignedTo: assignedTo?._id,
       status: assignedTo ? "issued" : payload.status,
       issuedAt: assignedTo ? payload.issuedAt || new Date() : payload.issuedAt,
@@ -138,7 +155,7 @@ router.post("/", requireAuth, requireHrOrAdmin, async (req, res, next) => {
 
     res.status(201).json(toAsset(populated));
   } catch (error) {
-    if (error.message === "Asset name and tag are required") {
+    if (error.message === "Asset ID and name are required") {
       return res.status(400).json({ message: error.message });
     }
     next(error);
@@ -158,6 +175,10 @@ router.put("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
 
     Object.assign(asset, buildPayload({ ...asset.toObject(), ...req.body }));
     asset.assignedTo = assignedTo?._id || undefined;
+
+    if (assignedTo && !req.body.department) {
+      asset.department = assignedTo.department || "";
+    }
 
     if (req.body.status === "returned" || req.body.status === "available") {
       asset.returnedAt = new Date();
@@ -181,7 +202,7 @@ router.put("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
 
     res.json(toAsset(populated));
   } catch (error) {
-    if (error.message === "Asset name and tag are required") {
+    if (error.message === "Asset ID and name are required") {
       return res.status(400).json({ message: error.message });
     }
     next(error);

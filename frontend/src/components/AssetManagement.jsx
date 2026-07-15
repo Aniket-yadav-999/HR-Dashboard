@@ -5,7 +5,20 @@ import { createAsset, getAssets, updateAsset } from "../services/api";
 const categories = ["laptop", "desktop", "accessory", "mouse", "other"];
 const statuses = ["available", "issued", "maintenance", "returned", "retired"];
 const conditions = ["new", "good", "needs_repair", "damaged"];
-const emptyForm = { name: "", assetTag: "", category: "laptop", condition: "good", assignedTo: "", notes: "" };
+const emptyForm = {
+  assetId: "",
+  name: "",
+  category: "laptop",
+  brandModel: "",
+  serialNumber: "",
+  assignedTo: "",
+  department: "",
+  location: "",
+  status: "available",
+  condition: "good",
+  ipAddress: "",
+  notes: ""
+};
 
 function titleCase(value) {
   return value.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
@@ -57,7 +70,19 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
   }, []);
 
   function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      if (field === "assignedTo") {
+        const selectedUser = users.find((user) => user.id === value);
+        return {
+          ...current,
+          assignedTo: value,
+          department: selectedUser?.department || current.department,
+          status: value ? "issued" : current.status === "issued" ? "available" : current.status
+        };
+      }
+
+      return { ...current, [field]: value };
+    });
   }
 
   async function submitAsset(event) {
@@ -137,11 +162,13 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[#064b36]">Asset Desk</p>
             <h2 className="mt-1 text-2xl font-black text-[#15372b]">Add or issue asset</h2>
             <div className="mt-5 grid gap-3">
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Asset ID" value={form.assetId} onChange={(event) => updateForm("assetId", event.target.value)} required />
               <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Asset name" value={form.name} onChange={(event) => updateForm("name", event.target.value)} required />
-              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Asset tag / serial number" value={form.assetTag} onChange={(event) => updateForm("assetTag", event.target.value)} required />
               <select className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" value={form.category} onChange={(event) => updateForm("category", event.target.value)}>
                 {categories.map((category) => <option key={category} value={category}>{titleCase(category)}</option>)}
               </select>
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Brand / Model" value={form.brandModel} onChange={(event) => updateForm("brandModel", event.target.value)} />
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Serial number" value={form.serialNumber} onChange={(event) => updateForm("serialNumber", event.target.value)} />
               <select className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" value={form.condition} onChange={(event) => updateForm("condition", event.target.value)}>
                 {conditions.map((condition) => <option key={condition} value={condition}>{titleCase(condition)}</option>)}
               </select>
@@ -149,6 +176,12 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
                 <option value="">Keep available</option>
                 {users.map((user) => <option key={user.id} value={user.id}>{user.name} - {user.email}</option>)}
               </select>
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Department" value={form.department} onChange={(event) => updateForm("department", event.target.value)} />
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="Location" value={form.location} onChange={(event) => updateForm("location", event.target.value)} />
+              <select className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" value={form.status} onChange={(event) => updateForm("status", event.target.value)}>
+                {statuses.map((status) => <option key={status} value={status}>{titleCase(status)}</option>)}
+              </select>
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold outline-none focus:border-[#064b36]" placeholder="IP address" value={form.ipAddress} onChange={(event) => updateForm("ipAddress", event.target.value)} />
               <textarea className="min-h-28 rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-bold leading-6 outline-none focus:border-[#064b36]" placeholder="Notes" value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} />
               <button className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#064b36] px-4 py-4 text-sm font-black text-white shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 hover:bg-[#0b5d43]" disabled={saving} type="submit">
                 {saving ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
@@ -179,26 +212,36 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-[#064b36] text-xs uppercase tracking-widest text-white">
                 <tr>
-                  <th className="px-4 py-4 font-black">Asset</th>
+                  <th className="px-4 py-4 font-black">Asset ID</th>
+                  <th className="px-4 py-4 font-black">Asset Name</th>
+                  <th className="px-4 py-4 font-black">Category</th>
+                  <th className="px-4 py-4 font-black">Brand/Model</th>
+                  <th className="px-4 py-4 font-black">Serial Number</th>
                   <th className="px-4 py-4 font-black">Assigned To</th>
-                  <th className="px-4 py-4 font-black">Condition</th>
+                  <th className="px-4 py-4 font-black">Department</th>
+                  <th className="px-4 py-4 font-black">Location</th>
                   <th className="px-4 py-4 font-black">Status</th>
-                  <th className="px-4 py-4 font-black">Updated</th>
+                  <th className="px-4 py-4 font-black">Condition</th>
+                  <th className="px-4 py-4 font-black">IP Address</th>
+                  <th className="px-4 py-4 font-black">Notes</th>
                   {canManage ? <th className="px-4 py-4 font-black">Manage</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {visibleAssets.map((asset) => (
                   <tr key={asset.id} className="transition hover:bg-[#eff6df]">
-                    <td className="px-4 py-4">
-                      <p className="font-black text-[#15372b]">{asset.name}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{asset.assetTag} - {asset.categoryLabel}</p>
-                      {asset.notes ? <p className="mt-1 line-clamp-2 text-xs text-slate-500">{asset.notes}</p> : null}
-                    </td>
+                    <td className="whitespace-nowrap px-4 py-4 font-black text-[#15372b]">{asset.assetId}</td>
+                    <td className="whitespace-nowrap px-4 py-4 font-black text-[#15372b]">{asset.name}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.categoryLabel}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.brandModel || "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.serialNumber || "—"}</td>
                     <td className="px-4 py-4 text-slate-600">{asset.assignedTo?.name || "Available"}</td>
-                    <td className="px-4 py-4 text-slate-600">{asset.conditionLabel}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.department || "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.location || "—"}</td>
                     <td className="px-4 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(asset.status)}`}>{asset.statusLabel}</span></td>
-                    <td className="whitespace-nowrap px-4 py-4 text-xs font-bold text-slate-500">{new Date(asset.updatedAt).toLocaleString("en-IN")}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.conditionLabel}</td>
+                    <td className="whitespace-nowrap px-4 py-4 text-slate-600">{asset.ipAddress || "—"}</td>
+                    <td className="min-w-48 px-4 py-4 text-xs text-slate-500">{asset.notes || "—"}</td>
                     {canManage ? (
                       <td className="px-4 py-4">
                         <div className="flex min-w-44 flex-col gap-2">
@@ -216,7 +259,7 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
                 ))}
                 {!visibleAssets.length ? (
                   <tr>
-                    <td className="px-5 py-10 text-center text-sm font-bold text-slate-500" colSpan={canManage ? 6 : 5}>No assets found.</td>
+                    <td className="px-5 py-10 text-center text-sm font-bold text-slate-500" colSpan={canManage ? 13 : 12}>No assets found.</td>
                   </tr>
                 ) : null}
               </tbody>
