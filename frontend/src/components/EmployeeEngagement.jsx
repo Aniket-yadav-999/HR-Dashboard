@@ -645,7 +645,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
       {canManage ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
           <div className="mb-4">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#064b36]">HR Controls</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#064b36]">HR &amp; Admin Controls</p>
             <h2 className="mt-1 text-2xl font-black text-[#15372b]">{editingId ? "Update engagement post" : "Create engagement post"}</h2>
           </div>
           <div className="grid gap-3 lg:grid-cols-[0.8fr_1fr_0.7fr]">
