@@ -35,6 +35,11 @@ const leaveEntitlements = {
   sick_leave: 7
 };
 
+const monthOptions = Array.from({ length: 12 }, (_, month) => ({
+  value: month,
+  label: new Intl.DateTimeFormat("en-IN", { month: "long" }).format(new Date(2026, month, 1))
+}));
+
 const holidayThemes = {
   "new-year": { a: "#0f766e", b: "#38bdf8", c: "#facc15", label: "2026" },
   "republic-day": { a: "#f97316", b: "#ffffff", c: "#16a34a", label: "26" },
@@ -157,7 +162,7 @@ function holidayImageSrc(holiday) {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function downloadExcel(records) {
+function downloadRecordList(records) {
   const rows = records.map((record) => `
     <tr>
       <td>${escapeHtml(formatDate(record.date))}</td>
@@ -181,6 +186,49 @@ function downloadExcel(records) {
   const link = document.createElement("a");
   link.href = url;
   link.download = `attendance-records-${new Date().toISOString().slice(0, 10)}.xls`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function attendanceDateKey(value) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function downloadAttendanceMatrix({ month, people, records, year }) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const attendanceByPersonAndDate = new Map();
+
+  records.forEach((record) => {
+    attendanceByPersonAndDate.set(`${record.employeeEmail}|${attendanceDateKey(record.date)}`, record.label);
+  });
+
+  const nameCounts = people.reduce((counts, person) => counts.set(person.name, (counts.get(person.name) || 0) + 1), new Map());
+  const headings = people.map((person) => (nameCounts.get(person.name) > 1 ? `${person.name} (${person.email})` : person.name));
+  const rows = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const date = new Date(year, month, day);
+    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const values = people.map((person) => attendanceByPersonAndDate.get(`${person.email}|${dateKey}`) || "Not Marked");
+    return `<tr><td>${escapeHtml(formatDate(date))}</td>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
+  });
+  const html = `
+    <html>
+      <head><meta charset="UTF-8" /></head>
+      <body>
+        <table border="1">
+          <thead><tr><th>Date</th>${headings.map((heading) => `<th>${escapeHtml(heading)}</th>`).join("")}</tr></thead>
+          <tbody>${rows.join("")}</tbody>
+        </table>
+      </body>
+    </html>
+  `;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const monthName = monthOptions[month].label.toLowerCase();
+  link.href = url;
+  link.download = `attendance-${monthName}-${year}.xls`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -263,6 +311,9 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   const [records, setRecords] = useState([]);
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recordsPage, setRecordsPage] = useState(1);
+  const [attendanceMonth, setAttendanceMonth] = useState(new Date().getMonth());
+  const [attendanceTeam, setAttendanceTeam] = useState("all");
+  const [attendanceEmployee, setAttendanceEmployee] = useState("all");
   const [holidays, setHolidays] = useState([]);
   const [holidayMessage, setHolidayMessage] = useState("");
   const [holidaySaving, setHolidaySaving] = useState(false);
@@ -276,10 +327,41 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   const isVisit = ["client_visit", "spot_visit"].includes(selectedType);
   const selectedOption = options.find((option) => option.value === selectedType);
   const canManageHolidays = ["admin", "hr"].includes(user.role);
+  const canManageAttendance = ["admin", "hr"].includes(user.role);
   const currentYear = today.getFullYear();
   const recordsPageSize = 8;
-  const recordsTotalPages = Math.max(1, Math.ceil(records.length / recordsPageSize));
-  const visibleRecords = records.slice((recordsPage - 1) * recordsPageSize, recordsPage * recordsPageSize);
+  const attendancePeople = useMemo(
+    () => [...users].sort((first, second) => first.name.localeCompare(second.name)),
+    [users]
+  );
+  const attendanceTeams = useMemo(
+    () => [...new Set(attendancePeople.map((person) => person.teamName).filter(Boolean))].sort((first, second) => first.localeCompare(second)),
+    [attendancePeople]
+  );
+  const attendanceEmployeeOptions = useMemo(
+    () => attendancePeople.filter((person) => attendanceTeam === "all" || person.teamName === attendanceTeam),
+    [attendancePeople, attendanceTeam]
+  );
+  const selectedAttendancePeople = useMemo(() => {
+    if (attendanceEmployee !== "all") {
+      return attendancePeople.filter((person) => person.email === attendanceEmployee);
+    }
+
+    return attendancePeople.filter((person) => attendanceTeam === "all" || person.teamName === attendanceTeam);
+  }, [attendanceEmployee, attendancePeople, attendanceTeam]);
+  const filteredAttendanceRecords = useMemo(
+    () => records.filter((record) => {
+      const date = new Date(record.date);
+      const monthMatches = date.getFullYear() === currentYear && date.getMonth() === attendanceMonth;
+      const teamMatches = attendanceTeam === "all" || record.teamName === attendanceTeam;
+      const employeeMatches = attendanceEmployee === "all" || record.employeeEmail === attendanceEmployee;
+      return monthMatches && teamMatches && employeeMatches;
+    }),
+    [attendanceEmployee, attendanceMonth, attendanceTeam, currentYear, records]
+  );
+  const tableRecords = canManageAttendance ? filteredAttendanceRecords : records;
+  const recordsTotalPages = Math.max(1, Math.ceil(tableRecords.length / recordsPageSize));
+  const visibleRecords = tableRecords.slice((recordsPage - 1) * recordsPageSize, recordsPage * recordsPageSize);
   const leaveSummaries = useMemo(
     () => buildLeaveSummaries({ records, users, currentUser: user, year: currentYear }),
     [records, users, user, currentYear]
@@ -337,6 +419,10 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   useEffect(() => {
     setRecordsPage((current) => Math.min(current, recordsTotalPages));
   }, [recordsTotalPages]);
+
+  useEffect(() => {
+    setRecordsPage(1);
+  }, [attendanceEmployee, attendanceMonth, attendanceTeam]);
 
   function chooseType(type) {
     setSelectedType(type);
@@ -455,6 +541,20 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function downloadFilteredAttendance() {
+    if (!canManageAttendance) {
+      downloadRecordList(records);
+      return;
+    }
+
+    downloadAttendanceMatrix({
+      month: attendanceMonth,
+      people: selectedAttendancePeople,
+      records: filteredAttendanceRecords,
+      year: currentYear
+    });
   }
 
   return (
@@ -628,20 +728,53 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
-        <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-slate-100 p-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#064b36]">Daily Records</p>
             <h2 className="mt-2 text-2xl font-black text-[#15372b]">Attendance Table</h2>
           </div>
-          <button
-            onClick={() => downloadExcel(records)}
-            disabled={!records.length}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-100 bg-[#064b36] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 hover:bg-[#0b5d43] disabled:cursor-not-allowed disabled:opacity-50"
-            type="button"
-          >
-            <Download size={17} />
-            Download Excel
-          </button>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            {canManageAttendance ? (
+              <>
+                <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Month
+                  <select className="min-w-36 rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm font-semibold normal-case tracking-normal text-[#15372b] outline-none focus:border-[#064b36]" value={attendanceMonth} onChange={(event) => setAttendanceMonth(Number(event.target.value))}>
+                    {monthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Team
+                  <select
+                    className="min-w-40 rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm font-semibold normal-case tracking-normal text-[#15372b] outline-none focus:border-[#064b36]"
+                    value={attendanceTeam}
+                    onChange={(event) => {
+                      setAttendanceTeam(event.target.value);
+                      setAttendanceEmployee("all");
+                    }}
+                  >
+                    <option value="all">All Teams</option>
+                    {attendanceTeams.map((team) => <option key={team} value={team}>{team}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Employee Name
+                  <select className="min-w-48 rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm font-semibold normal-case tracking-normal text-[#15372b] outline-none focus:border-[#064b36]" value={attendanceEmployee} onChange={(event) => setAttendanceEmployee(event.target.value)}>
+                    <option value="all">All Employees</option>
+                    {attendanceEmployeeOptions.map((person) => <option key={person.id || person.email} value={person.email}>{person.name}</option>)}
+                  </select>
+                </label>
+              </>
+            ) : null}
+            <button
+              onClick={downloadFilteredAttendance}
+              disabled={canManageAttendance ? !selectedAttendancePeople.length : !records.length}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-teal-100 bg-[#064b36] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 hover:bg-[#0b5d43] disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+            >
+              <Download size={17} />
+              Download Excel
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -660,7 +793,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
                     <span className="inline-flex items-center gap-2"><Loader2 size={17} className="animate-spin text-[#064b36]" /> Loading records</span>
                   </td>
                 </tr>
-              ) : records.length ? (
+              ) : tableRecords.length ? (
                 visibleRecords.map((record) => {
                   const option = options.find((item) => item.value === record.type);
                   return (
@@ -687,13 +820,13 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
                 })
               ) : (
                 <tr>
-                  <td className="px-5 py-8 text-sm font-semibold text-slate-500" colSpan="3">No attendance records yet.</td>
+                  <td className="px-5 py-8 text-sm font-semibold text-slate-500" colSpan="3">{canManageAttendance ? "No attendance records match the selected filters." : "No attendance records yet."}</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        {records.length ? (
+        {tableRecords.length ? (
           <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4">
             <p className="text-xs font-semibold text-slate-500">
               Page {recordsPage} of {recordsTotalPages}
