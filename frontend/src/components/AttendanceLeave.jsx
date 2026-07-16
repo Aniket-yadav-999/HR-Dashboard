@@ -111,9 +111,13 @@ function themeFromText(text) {
 }
 
 function holidayImageSrc(holiday) {
-  const imageKey = holiday?.imageKey || holiday?.name || "festival";
+  const imageKey = String(holiday?.imageKey || holiday?.name || "festival").trim();
 
-  if (/^https?:\/\//i.test(imageKey)) {
+  if (/^www\./i.test(imageKey)) {
+    return `https://${imageKey}`;
+  }
+
+  if (/^(https?:)?\/\//i.test(imageKey) || /^(data:image\/|blob:|\.?\.?\/)/i.test(imageKey) || /\.(gif|jpe?g|png|webp|avif|svg|bmp)([?#].*)?$/i.test(imageKey)) {
     return imageKey;
   }
 
@@ -1076,14 +1080,22 @@ function HolidaySpotlight({
   onSave
 }) {
   const [page, setPage] = useState(1);
+  const [selectedHolidayId, setSelectedHolidayId] = useState("");
   const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(holidays.length / pageSize));
   const pageStart = (page - 1) * pageSize;
   const visibleHolidays = holidays.slice(pageStart, pageStart + pageSize);
+  const selectedHoliday = holidays.find((holiday) => holiday.id === selectedHolidayId) || nextHoliday || null;
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
+
+  useEffect(() => {
+    if (selectedHolidayId && !holidays.some((holiday) => holiday.id === selectedHolidayId)) {
+      setSelectedHolidayId(nextHoliday?.id || "");
+    }
+  }, [holidays, nextHoliday, selectedHolidayId]);
 
   function goToPage(nextPage) {
     setPage(Math.min(totalPages, Math.max(1, nextPage)));
@@ -1094,24 +1106,29 @@ function HolidaySpotlight({
       <div className="grid gap-4 2xl:grid-cols-[0.85fr_1.15fr]">
         <div className="relative min-h-[360px] overflow-hidden rounded-2xl bg-[#064b36]">
           <img
-            alt={`${nextHoliday?.name || "Company"} holiday`}
+            key={`${selectedHoliday?.id || "default"}-${selectedHoliday?.imageKey || "festival"}`}
+            alt={`${selectedHoliday?.name || "Company"} holiday`}
             className="absolute inset-0 h-full w-full object-cover opacity-95"
-            src={nextHoliday ? holidayImageSrc(nextHoliday) : holidayImageSrc({ name: "Holiday", imageKey: "festival" })}
+            src={selectedHoliday ? holidayImageSrc(selectedHoliday) : holidayImageSrc({ name: "Holiday", imageKey: "festival" })}
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = holidayImageSrc({ name: selectedHoliday?.name || "Holiday", imageKey: "festival" });
+            }}
             style={{ animation: "floatHoliday 5s ease-in-out infinite" }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/80 via-emerald-900/20 to-transparent" />
           <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#15372b] shadow-sm">
               <CalendarPlus size={14} />
-              Next Holiday
+              {selectedHolidayId ? "Selected Preview" : "Next Holiday"}
             </span>
             <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
-              {nextHoliday?.day || "Upcoming"}
+              {selectedHoliday?.day || "Upcoming"}
             </span>
           </div>
           <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-            <h2 className="text-3xl font-semibold">{nextHoliday?.name || "Holiday"}</h2>
-            <p className="mt-2 text-sm font-semibold text-lime-50">{nextHoliday ? formatHolidayDate(nextHoliday.date) : "Loading date"}</p>
+            <h2 className="text-3xl font-semibold">{selectedHoliday?.name || "Holiday"}</h2>
+            <p className="mt-2 text-sm font-semibold text-lime-50">{selectedHoliday ? formatHolidayDate(selectedHoliday.date) : "Loading date"}</p>
           </div>
         </div>
 
@@ -1151,7 +1168,7 @@ function HolidaySpotlight({
                   <Image size={16} className="text-slate-400" />
                   <input
                     className="w-full bg-transparent outline-none"
-                    placeholder="GIF URL or festival style"
+                    placeholder="JPG, PNG, GIF, WebP or image URL"
                     value={holidayForm.imageKey}
                     onChange={(event) => onFormChange("imageKey", event.target.value)}
                   />
@@ -1179,18 +1196,32 @@ function HolidaySpotlight({
 
           <div className="space-y-2">
             {visibleHolidays.map((holiday) => (
-              <div key={holiday.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-100 hover:shadow-md">
+              <div
+                key={holiday.id}
+                onClick={() => setSelectedHolidayId(holiday.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedHolidayId(holiday.id);
+                  }
+                }}
+                className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-3 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-100 hover:shadow-md ${selectedHoliday?.id === holiday.id ? "border-[#064b36] bg-[#eff6df] ring-2 ring-emerald-900/10" : "border-slate-100 bg-white"}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Preview ${holiday.name} image`}
+              >
                 <div>
                   <p className="text-sm font-semibold text-[#15372b]">{holiday.name}</p>
                   <p className="text-xs text-slate-500">{formatHolidayDate(holiday.date)}</p>
+                  {selectedHoliday?.id === holiday.id ? <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#064b36]">Previewing</p> : null}
                 </div>
                 {canManage ? (
                   <div className="flex items-center gap-2">
-                    <button onClick={() => onEdit(holiday)} className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-[#064b36]" type="button" title="Edit holiday" aria-label={`Edit ${holiday.name}`}>
+                    <button onClick={(event) => { event.stopPropagation(); setSelectedHolidayId(holiday.id); onEdit(holiday); }} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50 hover:text-[#064b36]" type="button" title="Edit holiday" aria-label={`Edit ${holiday.name}`}>
                       <Edit3 size={15} />
                     </button>
                     <button
-                      onClick={() => onDelete(holiday)}
+                      onClick={(event) => { event.stopPropagation(); onDelete(holiday); }}
                       disabled={deletingHolidayId === holiday.id}
                       className="rounded-lg border border-rose-100 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                       type="button"
