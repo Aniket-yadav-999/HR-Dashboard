@@ -55,6 +55,36 @@ function visibleUserFilter(user) {
   return { _id: user._id };
 }
 
+function overviewUserFilter(user) {
+  if (["admin", "hr"].includes(user.role)) {
+    return {};
+  }
+
+  const teamFilters = [];
+
+  if (user.managerEmail) {
+    teamFilters.push({ managerEmail: user.managerEmail });
+    teamFilters.push({ email: user.managerEmail });
+  }
+
+  if (user.role === "manager") {
+    teamFilters.push({ managerEmail: user.email });
+  }
+
+  if (user.teamName && user.teamName !== "General") {
+    teamFilters.push({ teamName: user.teamName });
+  }
+
+  if (!teamFilters.length) {
+    return { _id: { $in: [] } };
+  }
+
+  return {
+    _id: { $ne: user._id },
+    $or: teamFilters
+  };
+}
+
 function buildUserPayload(body, existingUser) {
   const status = statuses.includes(body.status) ? body.status : existingUser?.status || "active";
   const payload = {
@@ -90,7 +120,7 @@ router.get("/", requireAuth, async (req, res, next) => {
 
 router.get("/overview", requireAuth, async (req, res, next) => {
   try {
-    const users = await User.find({}).sort({ joinedAt: -1 });
+    const users = await User.find(overviewUserFilter(req.user)).sort({ joinedAt: -1 });
     res.json(users.map(toOverviewUserCard));
   } catch (error) {
     next(error);

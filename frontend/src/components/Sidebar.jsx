@@ -6,12 +6,14 @@ const items = [
   { label: "Attendance & Leave", value: "attendance", icon: CalendarDays },
   { label: "Employee Engagement", value: "engagement", icon: HeartHandshake },
   { label: "AAGarg Organization", value: "organization", icon: Network },
-  { label: "Asset Management", value: "assets", icon: Laptop },
+  { label: "Asset Management", value: "assets", icon: Laptop, roles: ["admin", "hr"] },
   { label: "Helpdesk & Requests", value: "helpdesk", icon: Headphones },
   { label: "Notifications", value: "notifications", icon: Bell }
 ];
 
-function Sidebar({ collapsed, activeView, onViewChange, onToggle }) {
+function Sidebar({ collapsed, activeView, onViewChange, onToggle, currentUser }) {
+  const visibleItems = items.filter((item) => !item.roles || item.roles.includes(currentUser?.role));
+
   return (
     <aside
       className={`fixed bottom-0 left-0 top-0 z-40 hidden border-r border-emerald-950 bg-[#064b36] px-3 py-5 shadow-2xl shadow-emerald-950/25 transition-all duration-300 lg:block ${
@@ -38,7 +40,7 @@ function Sidebar({ collapsed, activeView, onViewChange, onToggle }) {
       </div>
 
       <nav className="space-y-3">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           return (
             <button

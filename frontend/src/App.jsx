@@ -79,6 +79,7 @@ function App() {
 
   async function handleAuthenticated(authenticatedUser) {
     setUser(authenticatedUser);
+    setActiveView("overview");
     await loadUsers();
     await loadNotifications();
   }
@@ -95,6 +96,7 @@ function App() {
     setUsers([]);
     setOverviewUsers([]);
     setNotifications([]);
+    setActiveView("overview");
   }
 
   function handleUserCreated(createdUser) {
@@ -148,6 +150,7 @@ function App() {
       <div className="flex">
         {user ? (
           <Sidebar
+            currentUser={user}
             collapsed={sidebarCollapsed}
             activeView={activeView}
             onViewChange={setActiveView}
@@ -216,7 +219,7 @@ function App() {
               {activeView === "attendance" ? <AttendanceLeave user={user} users={users} onSubmitted={loadNotifications} /> : null}
               {activeView === "engagement" ? <EmployeeEngagement currentUser={user} users={users} onChanged={loadNotifications} /> : null}
               {activeView === "organization" ? <OrganizationTree currentUser={user} users={users} /> : null}
-              {activeView === "assets" ? <AssetManagement currentUser={user} users={users} onChanged={loadNotifications} /> : null}
+              {activeView === "assets" && ["admin", "hr"].includes(user.role) ? <AssetManagement currentUser={user} users={users} onChanged={loadNotifications} /> : null}
               {activeView === "helpdesk" ? <HelpdeskRequests currentUser={user} onChanged={loadNotifications} /> : null}
               {activeView === "notifications" ? <NotificationsPanel notifications={notifications} /> : null}
               {activeView === "profile" ? <EmployeeIdCard user={user} /> : null}

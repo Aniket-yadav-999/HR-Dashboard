@@ -28,9 +28,15 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
     .slice(0, 5);
   const activeRate = stats.total ? Math.round((stats.active / stats.total) * 100) : 0;
   const canManageUsers = ["admin", "hr"].includes(currentUser?.role);
+  const directoryTitle = canManageUsers ? "Employee Directory" : "Team Members";
+  const directoryDescription = canManageUsers
+    ? "Organization-wide employee directory."
+    : currentUser?.teamName && currentUser.teamName !== "General"
+      ? `Members of ${currentUser.teamName}.`
+      : "People who work directly with your team.";
 
   const cards = [
-    { title: "Total Employees", value: stats.total, icon: Users, helper: "Complete workforce strength", color: "#064b36" },
+    { title: canManageUsers ? "Total Employees" : "Team Members", value: stats.total, icon: Users, helper: canManageUsers ? "Complete workforce strength" : "People in your team", color: "#064b36" },
     { title: "Active", value: stats.active, icon: UserCheck, helper: `${activeRate}% currently active`, color: "#123c69" },
     { title: "Inactive", value: stats.inactive, icon: Activity, helper: "Temporarily inactive employees", color: "#5d3b09" },
     { title: "New Joiners", value: stats.newJoiners, icon: UserRoundPlus, helper: "Joined this month", color: "#4a2f73" },
@@ -49,8 +55,8 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
             <div>
-              <h3 className="text-xl font-black text-[#15372b]">Employee Directory</h3>
-              <p className="mt-1 text-sm text-slate-500">Organization-wide employee directory.</p>
+              <h3 className="text-xl font-black text-[#15372b]">{directoryTitle}</h3>
+              <p className="mt-1 text-sm text-slate-500">{directoryDescription}</p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eff6df] text-[#064b36]">
               <BriefcaseBusiness size={22} />
@@ -129,7 +135,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
                 {!users.length ? (
                   <tr>
                     <td className="px-5 py-10 text-center text-slate-500" colSpan={canManageUsers ? 6 : 5}>
-                      No employees yet. Admin can create users from the panel.
+                      {canManageUsers ? "No employees yet. Admin can create users from the panel." : "No team members are assigned to you yet."}
                     </td>
                   </tr>
                 ) : null}

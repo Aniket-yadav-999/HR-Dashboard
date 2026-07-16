@@ -99,23 +99,9 @@ async function notifyRecipients({ actor, recipients, title, message }) {
   );
 }
 
-router.get("/", requireAuth, async (req, res, next) => {
+router.get("/", requireAuth, requireHrOrAdmin, async (_req, res, next) => {
   try {
-    let assets = await Asset.find().populate("assignedTo", "name email department teamName managerEmail").sort({ updatedAt: -1 });
-
-    if (!["admin", "hr"].includes(req.user.role)) {
-      assets = assets.filter((asset) => {
-        if (!asset.assignedTo) {
-          return false;
-        }
-
-        if (String(asset.assignedTo._id) === String(req.user._id)) {
-          return true;
-        }
-
-        return req.user.role === "manager" && asset.assignedTo.managerEmail === req.user.email;
-      });
-    }
+    const assets = await Asset.find().populate("assignedTo", "name email department teamName managerEmail").sort({ updatedAt: -1 });
 
     res.json(assets.map(toAsset));
   } catch (error) {
