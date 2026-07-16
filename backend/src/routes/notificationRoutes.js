@@ -6,7 +6,13 @@ const router = Router();
 
 router.get("/", requireAuth, async (req, res, next) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user._id })
+    const query = { recipient: req.user._id };
+
+    if (!["admin", "hr"].includes(req.user.role)) {
+      query.type = { $nin: ["feedback", "training_suggestion"] };
+    }
+
+    const notifications = await Notification.find(query)
       .sort({ createdAt: -1 })
       .limit(30)
       .populate("actor", "name email role");

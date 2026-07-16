@@ -9,6 +9,9 @@ const sectionStyles = {
   recognition: { label: "Recognition", color: "#7a2e25", icon: HeartHandshake },
   event: { label: "Events", color: "#4a2f73", icon: Bell },
   feedback: { label: "Feedback", color: "#2f5f53", icon: Sparkles },
+  epr_internal_training: { label: "EPR Internal Training", color: "#075985", icon: Sparkles },
+  training: { label: "Training", color: "#9a3412", icon: Sparkles },
+  training_suggestion: { label: "Training Suggestion", color: "#064b36", icon: Sparkles },
   attendance: { label: "Attendance & Leave", color: "#064b36", icon: CalendarDays },
   asset: { label: "Asset Management", color: "#123c69", icon: Laptop },
   helpdesk: { label: "Helpdesk & Requests", color: "#0f5f6b", icon: Headphones },
@@ -16,7 +19,7 @@ const sectionStyles = {
   default: { label: "General Updates", color: "#5d3b09", icon: Bell }
 };
 
-const primaryTypes = ["birthday", "work_anniversary", "office_anniversary", "promotion", "recognition", "event", "feedback", "attendance", "asset", "helpdesk"];
+const primaryTypes = ["birthday", "work_anniversary", "office_anniversary", "promotion", "recognition", "event", "feedback", "epr_internal_training", "training", "training_suggestion", "attendance", "asset", "helpdesk"];
 const fallbackColors = ["#064b36", "#123c69", "#5d3b09", "#4a2f73", "#7a2e25", "#0f5f6b"];
 
 function getSection(type) {

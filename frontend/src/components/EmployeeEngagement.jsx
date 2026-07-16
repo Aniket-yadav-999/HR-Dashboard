@@ -1,18 +1,24 @@
 import {
   Award,
+  BookOpenCheck,
   CalendarDays,
   CakeSlice,
+  Clock3,
   Edit3,
+  GraduationCap,
   HeartHandshake,
   Loader2,
+  MapPin,
   Megaphone,
   PartyPopper,
   Plus,
   Save,
   Sparkles,
   Star,
+  Send,
   Trash2,
   Trophy,
+  UserRound,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -26,20 +32,27 @@ const categories = [
   { value: "promotion", label: "Promotion", icon: Trophy },
   { value: "recognition", label: "Recognition", icon: HeartHandshake },
   { value: "event", label: "Events", icon: Megaphone },
-  { value: "feedback", label: "Feedback", icon: Edit3 }
+  { value: "epr_internal_training", label: "EPR Internal Training", icon: BookOpenCheck },
+  { value: "training", label: "Training", icon: GraduationCap },
+  { value: "feedback", label: "Feedback", icon: Edit3 },
+  { value: "training_suggestion", label: "Training Suggestions", icon: Send }
 ];
 
-const publishCategories = categories.filter((category) => ["promotion", "recognition", "event"].includes(category.value));
+const publishCategories = categories.filter((category) => ["promotion", "recognition", "event", "epr_internal_training", "training"].includes(category.value));
 
 const boardTabs = [
   { value: "birthday", label: "Birthdays", icon: CakeSlice, color: "#064b36" },
   { value: "work_anniversary", label: "Anniversaries", icon: PartyPopper, color: "#123c69" },
   { value: "promotion", label: "Promotions", icon: Trophy, color: "#5d3b09" },
-  { value: "event", label: "Events", icon: Megaphone, color: "#4a2f73" }
+  { value: "event", label: "Events", icon: Megaphone, color: "#4a2f73" },
+  { value: "epr_internal_training", label: "EPR Internal Training", icon: BookOpenCheck, color: "#075985" },
+  { value: "training", label: "Training", icon: GraduationCap, color: "#9a3412" }
 ];
 
-const emptyForm = { category: "event", title: "", employeeName: "", eventDate: "", description: "" };
+const trainingCategories = ["epr_internal_training", "training"];
+const emptyForm = { category: "event", title: "", employeeName: "", eventDate: "", description: "", trainer: "", venue: "", duration: "", mode: "In person" };
 const emptyFeedback = { title: "", description: "" };
+const emptyTrainingSuggestion = { title: "", description: "" };
 
 function isValidDate(value) {
   const date = value ? new Date(value) : null;
@@ -184,6 +197,41 @@ function PostIdCard({ item, canManage, onEdit, onDelete }) {
   );
 }
 
+function TrainingCard({ item, canManage, onEdit, onDelete }) {
+  const isEpr = item.category === "epr_internal_training";
+
+  return (
+    <article className="group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70 transition hover:-translate-y-1 hover:shadow-2xl">
+      <div className={`relative p-5 text-white ${isEpr ? "bg-gradient-to-br from-[#075985] to-[#0c4a6e]" : "bg-gradient-to-br from-[#9a3412] to-[#7c2d12]"}`}>
+        <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/10" />
+        <div className="relative flex items-start justify-between gap-4">
+          <span className="rounded-2xl bg-white/15 p-3 ring-1 ring-white/20">
+            {isEpr ? <BookOpenCheck size={24} /> : <GraduationCap size={24} />}
+          </span>
+          <span className="rounded-full bg-white/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest ring-1 ring-white/20">{item.mode || "Scheduled"}</span>
+        </div>
+        <p className="relative mt-5 text-[11px] font-black uppercase tracking-[0.2em] text-white/70">{item.categoryLabel}</p>
+        <h3 className="relative mt-2 text-xl font-black leading-tight">{item.title}</h3>
+      </div>
+      <div className="p-5">
+        {item.description ? <p className="line-clamp-3 text-sm leading-6 text-slate-500">{item.description}</p> : null}
+        <div className="mt-5 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
+          <span className="flex items-center gap-2 text-xs font-bold text-slate-600"><CalendarDays size={15} className="text-[#064b36]" />{item.eventDate ? formatDate(item.eventDate) : "Date to be announced"}</span>
+          <span className="flex items-center gap-2 text-xs font-bold text-slate-600"><UserRound size={15} className="text-[#064b36]" />{item.trainer || "Trainer to be announced"}</span>
+          <span className="flex items-center gap-2 text-xs font-bold text-slate-600"><MapPin size={15} className="text-[#064b36]" />{item.venue || item.mode || "Venue to be announced"}</span>
+          <span className="flex items-center gap-2 text-xs font-bold text-slate-600"><Clock3 size={15} className="text-[#064b36]" />{item.duration || "Duration to be announced"}</span>
+        </div>
+        {canManage ? (
+          <div className="mt-5 flex justify-end gap-2">
+            <button onClick={() => onEdit(item)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-[#eff6df] hover:text-[#064b36]" type="button" title="Edit training"><Edit3 size={16} /></button>
+            <button onClick={() => onDelete(item)} className="rounded-xl border border-rose-100 p-2 text-rose-500 hover:bg-rose-50" type="button" title="Delete training"><Trash2 size={16} /></button>
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 function PostCard({ item, canManage, onEdit, onDelete }) {
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70 transition hover:-translate-y-0.5">
@@ -229,10 +277,13 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
   const [editingId, setEditingId] = useState("");
   const [feedback, setFeedback] = useState(emptyFeedback);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [trainingSuggestion, setTrainingSuggestion] = useState(emptyTrainingSuggestion);
+  const [trainingSuggestionSaving, setTrainingSuggestionSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const canManage = ["admin", "hr"].includes(currentUser.role);
+  const visibleCategories = canManage ? categories : categories.filter((category) => !["feedback", "training_suggestion"].includes(category.value));
 
   const monthName = new Date().toLocaleString("en-IN", { month: "long", year: "numeric" });
 
@@ -258,8 +309,10 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
       .sort((first, second) => dayNumber(first.joinedAt) - dayNumber(second.joinedAt));
     const promotions = items.filter((item) => item.category === "promotion" && isCurrentMonth(item.eventDate));
     const events = items.filter((item) => item.category === "event" && isCurrentMonth(item.eventDate));
+    const eprTrainings = items.filter((item) => item.category === "epr_internal_training");
+    const trainings = items.filter((item) => item.category === "training");
 
-    return { birthdays: birthdaysThisMonth, today, upcomingBirthdays, anniversaries, promotions, events };
+    return { birthdays: birthdaysThisMonth, today, upcomingBirthdays, anniversaries, promotions, events, eprTrainings, trainings };
   }, [items, people, users]);
 
   const filteredItems = useMemo(() => items.filter((item) => item.category === activeCategory), [items, activeCategory]);
@@ -268,7 +321,9 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
     birthday: currentMonth.today.length + currentMonth.upcomingBirthdays.length,
     work_anniversary: currentMonth.anniversaries.length,
     promotion: currentMonth.promotions.length,
-    event: currentMonth.events.length
+    event: currentMonth.events.length,
+    epr_internal_training: currentMonth.eprTrainings.length,
+    training: currentMonth.trainings.length
   };
 
   async function loadItems() {
@@ -309,7 +364,11 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
       title: item.title,
       employeeName: item.employeeName || "",
       eventDate: item.eventDate ? item.eventDate.slice(0, 10) : "",
-      description: item.description || ""
+      description: item.description || "",
+      trainer: item.trainer || "",
+      venue: item.venue || "",
+      duration: item.duration || "",
+      mode: item.mode || "In person"
     });
     setActiveCategory(item.category);
     setMessage("");
@@ -334,13 +393,36 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
         description: feedback.description
       });
       setFeedback(emptyFeedback);
-      setMessage("Feedback submitted. HR/Admin has been notified.");
+      setMessage("Feedback submitted privately to HR.");
       await loadItems();
-      onChanged();
+      onChanged?.();
     } catch (error) {
       setMessage(error.response?.data?.message || "Could not submit feedback.");
     } finally {
       setFeedbackSaving(false);
+    }
+  }
+
+  async function submitTrainingSuggestion() {
+    setTrainingSuggestionSaving(true);
+    setMessage("");
+
+    try {
+      await createEngagementItem({
+        category: "training_suggestion",
+        title: trainingSuggestion.title.trim(),
+        employeeName: currentUser.name,
+        eventDate: new Date().toISOString().slice(0, 10),
+        description: trainingSuggestion.description
+      });
+      setTrainingSuggestion(emptyTrainingSuggestion);
+      setMessage("Training suggestion sent privately to HR.");
+      await loadItems();
+      onChanged?.();
+    } catch (error) {
+      setMessage(error.response?.data?.message || "Could not submit training suggestion.");
+    } finally {
+      setTrainingSuggestionSaving(false);
     }
   }
 
@@ -358,7 +440,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
       }
       resetForm();
       await loadItems();
-      onChanged();
+      onChanged?.();
     } catch (error) {
       setMessage(error.response?.data?.message || "Could not save engagement item.");
     } finally {
@@ -375,7 +457,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
 
     await deleteEngagementItem(item.id);
     await loadItems();
-    onChanged();
+    onChanged?.();
   }
 
   return (
@@ -396,14 +478,19 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {boardTabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeBoard === tab.value;
           return (
             <button
               key={tab.value}
-              onClick={() => setActiveBoard(tab.value)}
+              onClick={() => {
+                setActiveBoard(tab.value);
+                if (canManage && trainingCategories.includes(tab.value) && !editingId) {
+                  setForm((current) => ({ ...current, category: tab.value }));
+                }
+              }}
               className={`relative min-h-24 overflow-hidden rounded-3xl p-4 text-left text-white shadow-xl transition hover:-translate-y-0.5 ${active ? "ring-4 ring-[#bfff2f]/35" : ""}`}
               style={{ backgroundColor: tab.color }}
               type="button"
@@ -414,7 +501,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
                 <div>
                   <p className="text-sm font-bold text-white/80">{tab.label}</p>
                   <h2 className="mt-1 text-3xl font-black">{boardCounts[tab.value]}</h2>
-                  <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-white/65">{monthName}</p>
+                  <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-white/65">{trainingCategories.includes(tab.value) ? "Learning calendar" : monthName}</p>
                 </div>
                 <span className="rounded-2xl bg-white/14 p-2.5 ring-1 ring-white/20">
                   <Icon size={20} />
@@ -428,7 +515,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#064b36]">Current Month</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#064b36]">{trainingCategories.includes(activeBoard) ? "Training Calendar" : "Current Month"}</p>
             <h2 className="mt-1 text-2xl font-black text-[#15372b]">{boardTabs.find((tab) => tab.value === activeBoard)?.label}</h2>
           </div>
           <Award className="text-[#064b36]" size={24} />
@@ -508,7 +595,52 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
             )}
           </div>
         ) : null}
+
+        {activeBoard === "epr_internal_training" || activeBoard === "training" ? (
+          <div className="mt-5">
+            <div className="mb-5 rounded-3xl bg-[#f6f8f4] p-5 ring-1 ring-slate-200">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-[#064b36]">Learning & Development</p>
+                  <h3 className="mt-2 text-xl font-black text-[#15372b]">{activeBoard === "epr_internal_training" ? "EPR knowledge, shared internally" : "Build skills that move work forward"}</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">View the complete schedule, trainer details, delivery mode, venue, and duration in one place.</p>
+                </div>
+                <span className="shrink-0 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#064b36] shadow-sm">{boardCounts[activeBoard]} scheduled</span>
+              </div>
+            </div>
+            <div className="grid gap-5 lg:grid-cols-2">
+              {(activeBoard === "epr_internal_training" ? currentMonth.eprTrainings : currentMonth.trainings).length ? (
+                (activeBoard === "epr_internal_training" ? currentMonth.eprTrainings : currentMonth.trainings).map((item) => <TrainingCard key={item.id} item={item} canManage={canManage} onEdit={startEdit} onDelete={removeItem} />)
+              ) : (
+                <EmptyState title={`No ${activeBoard === "epr_internal_training" ? "EPR internal training" : "training"} has been scheduled yet.`} />
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
+
+      {trainingCategories.includes(activeBoard) ? (
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+          <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#15372b] to-[#064b36] p-6 text-white">
+              <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-[#bfff2f]/20" />
+              <div className="relative">
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-[#bfff2f]">Suggest a Training</p>
+                <h2 className="mt-3 text-3xl font-black">What should we learn next?</h2>
+                <p className="mt-3 max-w-md text-sm leading-6 text-emerald-50/80">Recommend a topic, tool, or skill that would help you or your team. Your suggestion goes privately to HR for review.</p>
+              </div>
+            </div>
+            <div className="grid gap-3 p-5">
+              <input className="rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-semibold outline-none focus:border-[#064b36] focus:bg-white" placeholder="Training topic or skill" value={trainingSuggestion.title} onChange={(event) => setTrainingSuggestion((current) => ({ ...current, title: event.target.value }))} />
+              <textarea className="min-h-28 rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm font-semibold leading-6 outline-none focus:border-[#064b36] focus:bg-white" placeholder="Why would this training be useful? Add the expected outcome or team need." value={trainingSuggestion.description} onChange={(event) => setTrainingSuggestion((current) => ({ ...current, description: event.target.value }))} />
+              <button onClick={submitTrainingSuggestion} disabled={trainingSuggestionSaving || !trainingSuggestion.title.trim() || !trainingSuggestion.description.trim()} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#064b36] px-4 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 hover:bg-[#0b5d43] disabled:cursor-not-allowed disabled:opacity-60" type="button">
+                {trainingSuggestionSaving ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
+                Send Suggestion to HR
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {canManage ? (
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
@@ -527,6 +659,18 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
             <input className="rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm outline-none focus:border-[#064b36]" placeholder="Employee name (optional)" value={form.employeeName} onChange={(event) => updateForm("employeeName", event.target.value)} />
             <input className="rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm outline-none focus:border-[#064b36] lg:col-span-2" placeholder="Description" value={form.description} onChange={(event) => updateForm("description", event.target.value)} />
           </div>
+          {trainingCategories.includes(form.category) ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <input className="rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm outline-none focus:border-[#064b36]" placeholder="Trainer / facilitator" value={form.trainer} onChange={(event) => updateForm("trainer", event.target.value)} />
+              <input className="rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm outline-none focus:border-[#064b36]" placeholder="Venue or meeting link" value={form.venue} onChange={(event) => updateForm("venue", event.target.value)} />
+              <input className="rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm outline-none focus:border-[#064b36]" placeholder="Duration (e.g. 2 hours)" value={form.duration} onChange={(event) => updateForm("duration", event.target.value)} />
+              <select className="rounded-xl border border-slate-200 bg-[#f6f8f4] px-3 py-3 text-sm outline-none focus:border-[#064b36]" value={form.mode} onChange={(event) => updateForm("mode", event.target.value)}>
+                <option>In person</option>
+                <option>Online</option>
+                <option>Hybrid</option>
+              </select>
+            </div>
+          ) : null}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button onClick={saveItem} disabled={saving} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#064b36] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 hover:bg-[#0b5d43] disabled:opacity-60" type="button">
               {saving ? <Loader2 size={17} className="animate-spin" /> : editingId ? <Save size={17} /> : <Plus size={17} />}
@@ -554,6 +698,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
               <p className="mt-3 max-w-md text-sm leading-6 text-emerald-50/80">
                 Send suggestions for office events, parties, celebrations, activities, and workplace improvements.
               </p>
+              <p className="mt-4 inline-flex rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-[#bfff2f] ring-1 ring-white/15">Private: visible only to HR</p>
             </div>
           </div>
           <div className="grid gap-3 p-5">
@@ -589,7 +734,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
             <h2 className="mt-1 text-2xl font-black text-[#15372b]">Engagement library</h2>
           </div>
           <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
+            {visibleCategories.map((category) => (
               <button
                 key={category.value}
                 onClick={() => {

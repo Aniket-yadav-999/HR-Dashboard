@@ -4,7 +4,18 @@ const engagementItemSchema = new mongoose.Schema(
   {
     category: {
       type: String,
-      enum: ["birthday", "work_anniversary", "office_anniversary", "promotion", "recognition", "event", "feedback"],
+      enum: [
+        "birthday",
+        "work_anniversary",
+        "office_anniversary",
+        "promotion",
+        "recognition",
+        "event",
+        "feedback",
+        "epr_internal_training",
+        "training",
+        "training_suggestion"
+      ],
       required: true
     },
     title: {
@@ -24,6 +35,26 @@ const engagementItemSchema = new mongoose.Schema(
       type: String,
       default: "",
       trim: true
+    },
+    trainer: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    venue: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    duration: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    mode: {
+      type: String,
+      enum: ["", "In person", "Online", "Hybrid"],
+      default: ""
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -5,7 +5,19 @@ import { Notification } from "../models/Notification.js";
 import { User } from "../models/User.js";
 
 const router = Router();
-const categories = ["birthday", "work_anniversary", "office_anniversary", "promotion", "recognition", "event", "feedback"];
+const categories = [
+  "birthday",
+  "work_anniversary",
+  "office_anniversary",
+  "promotion",
+  "recognition",
+  "event",
+  "feedback",
+  "epr_internal_training",
+  "training",
+  "training_suggestion"
+];
+const privateCategories = ["feedback", "training_suggestion"];
 
 function labelFor(category) {
   return {
@@ -15,7 +27,10 @@ function labelFor(category) {
     promotion: "Promotion",
     recognition: "Recognition",
     event: "Event",
-    feedback: "Feedback"
+    feedback: "Feedback",
+    epr_internal_training: "EPR Internal Training",
+    training: "Training",
+    training_suggestion: "Training Suggestion"
   }[category];
 }
 
@@ -28,6 +43,10 @@ function toEngagementCard(item) {
     description: item.description,
     eventDate: item.eventDate,
     employeeName: item.employeeName,
+    trainer: item.trainer,
+    venue: item.venue,
+    duration: item.duration,
+    mode: item.mode,
     createdAt: item.createdAt
   };
 }
@@ -56,7 +75,11 @@ function buildPayload(body) {
     title: body.title?.trim(),
     description: body.description?.trim() || "",
     employeeName: body.employeeName?.trim() || "",
-    eventDate: body.eventDate ? new Date(body.eventDate) : undefined
+    eventDate: body.eventDate ? new Date(body.eventDate) : undefined,
+    trainer: body.trainer?.trim() || "",
+    venue: body.venue?.trim() || "",
+    duration: body.duration?.trim() || "",
+    mode: ["In person", "Online", "Hybrid"].includes(body.mode) ? body.mode : ""
   };
 
   if (!payload.category || !payload.title) {
@@ -66,8 +89,11 @@ function buildPayload(body) {
   return payload;
 }
 
-async function notifyAllUsers({ actor, item, action }) {
-  const users = await User.find({ status: "active" }).select("_id");
+async function notifyUsers({ actor, item, action }) {
+  const audience = privateCategories.includes(item.category)
+    ? { status: "active", role: { $in: ["hr", "admin"] } }
+    : { status: "active" };
+  const users = await User.find(audience).select("_id");
 
   if (!users.length) {
     return;
@@ -88,9 +114,10 @@ async function notifyAllUsers({ actor, item, action }) {
   }
 }
 
-router.get("/", requireAuth, async (_req, res, next) => {
+router.get("/", requireAuth, async (req, res, next) => {
   try {
-    const items = await EngagementItem.find().sort({ eventDate: 1, createdAt: -1 });
+    const query = ["admin", "hr"].includes(req.user.role) ? {} : { category: { $nin: privateCategories } };
+    const items = await EngagementItem.find(query).sort({ eventDate: 1, createdAt: -1 });
     res.json(items.map(toEngagementCard));
   } catch (error) {
     next(error);
@@ -108,12 +135,12 @@ router.get("/people", requireAuth, async (_req, res, next) => {
 
 router.post("/", requireAuth, async (req, res, next) => {
   try {
-    if (req.body.category !== "feedback" && !["admin", "hr"].includes(req.user.role)) {
+    if (!["feedback", "training_suggestion"].includes(req.body.category) && !["admin", "hr"].includes(req.user.role)) {
       return res.status(403).json({ message: "Only HR or Admin can publish this engagement item" });
     }
 
     const item = await EngagementItem.create({ ...buildPayload(req.body), createdBy: req.user._id });
-    await notifyAllUsers({ actor: req.user, item, action: "added" });
+    await notifyUsers({ actor: req.user, item, action: "added" });
     res.status(201).json(toEngagementCard(item));
   } catch (error) {
     if (error.message === "Category and title are required") {
@@ -133,7 +160,7 @@ router.put("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
 
     Object.assign(item, buildPayload(req.body));
     await item.save();
-    await notifyAllUsers({ actor: req.user, item, action: "updated" });
+    await notifyUsers({ actor: req.user, item, action: "updated" });
     res.json(toEngagementCard(item));
   } catch (error) {
     if (error.message === "Category and title are required") {
@@ -151,7 +178,7 @@ router.delete("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
       return res.status(404).json({ message: "Engagement item not found" });
     }
 
-    await notifyAllUsers({ actor: req.user, item, action: "deleted" });
+    await notifyUsers({ actor: req.user, item, action: "deleted" });
     res.json({ message: "Engagement item deleted" });
   } catch (error) {
     next(error);
