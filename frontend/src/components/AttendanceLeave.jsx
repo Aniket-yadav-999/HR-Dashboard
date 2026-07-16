@@ -89,14 +89,6 @@ function makeTemplate(user, selectedOption, detail) {
   };
 }
 
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function themeFromText(text) {
   const value = String(text || "festival").toLowerCase();
   const knownKey = Object.keys(holidayThemes).find((key) => value.includes(key) || value.includes(key.replace(/-/g, " ")));
@@ -162,32 +154,48 @@ function holidayImageSrc(holiday) {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function downloadRecordList(records) {
-  const rows = records.map((record) => `
-    <tr>
-      <td>${escapeHtml(formatDate(record.date))}</td>
-      <td>${escapeHtml(record.employeeName)}</td>
-      <td>${escapeHtml(record.label)}</td>
-    </tr>
-  `);
-  const html = `
-    <html>
-      <head><meta charset="UTF-8" /></head>
-      <body>
-        <table border="1">
-          <thead><tr><th>Date</th><th>Employee Name</th><th>Status</th></tr></thead>
-          <tbody>${rows.join("")}</tbody>
-        </table>
-      </body>
-    </html>
-  `;
-  const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+function styleAttendanceWorksheet(worksheet) {
+  const header = worksheet.getRow(1);
+  header.height = 24;
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF064B36" } };
+  header.alignment = { vertical: "middle", horizontal: "center" };
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: worksheet.columnCount } };
+  worksheet.getColumn(1).numFmt = "dd mmm yyyy";
+  worksheet.eachRow((row, rowNumber) => {
+    row.alignment = { vertical: "middle", horizontal: rowNumber === 1 ? "center" : "left" };
+    if (rowNumber > 1 && rowNumber % 2 === 0) {
+      row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F7ED" } };
+    }
+  });
+}
+
+async function saveExcelWorkbook(workbook, fileName) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `attendance-records-${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = fileName;
+  document.body.appendChild(link);
   link.click();
+  link.remove();
   URL.revokeObjectURL(url);
+}
+
+async function downloadRecordList(records) {
+  const { default: ExcelJS } = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Attendance");
+  worksheet.columns = [
+    { header: "Date", key: "date", width: 16 },
+    { header: "Employee Name", key: "employeeName", width: 28 },
+    { header: "Status", key: "status", width: 24 }
+  ];
+  records.forEach((record) => worksheet.addRow({ date: new Date(record.date), employeeName: record.employeeName, status: record.label }));
+  styleAttendanceWorksheet(worksheet);
+  await saveExcelWorkbook(workbook, `attendance-records-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function attendanceDateKey(value) {
@@ -195,7 +203,8 @@ function attendanceDateKey(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function downloadAttendanceMatrix({ month, people, records, year }) {
+async function downloadAttendanceMatrix({ month, people, records, year }) {
+  const { default: ExcelJS } = await import("exceljs");
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const attendanceByPersonAndDate = new Map();
 
@@ -205,32 +214,27 @@ function downloadAttendanceMatrix({ month, people, records, year }) {
 
   const nameCounts = people.reduce((counts, person) => counts.set(person.name, (counts.get(person.name) || 0) + 1), new Map());
   const headings = people.map((person) => (nameCounts.get(person.name) > 1 ? `${person.name} (${person.email})` : person.name));
-  const rows = Array.from({ length: daysInMonth }, (_, index) => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(`${monthOptions[month].label} ${year}`);
+  worksheet.columns = [
+    { header: "Date", key: "date", width: 16 },
+    ...headings.map((heading, index) => ({ header: heading, key: `employee_${index}`, width: Math.max(18, Math.min(34, heading.length + 4)) }))
+  ];
+
+  Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
     const date = new Date(year, month, day);
     const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const values = people.map((person) => attendanceByPersonAndDate.get(`${person.email}|${dateKey}`) || "Not Marked");
-    return `<tr><td>${escapeHtml(formatDate(date))}</td>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
+    const row = { date };
+    values.forEach((value, valueIndex) => {
+      row[`employee_${valueIndex}`] = value;
+    });
+    worksheet.addRow(row);
   });
-  const html = `
-    <html>
-      <head><meta charset="UTF-8" /></head>
-      <body>
-        <table border="1">
-          <thead><tr><th>Date</th>${headings.map((heading) => `<th>${escapeHtml(heading)}</th>`).join("")}</tr></thead>
-          <tbody>${rows.join("")}</tbody>
-        </table>
-      </body>
-    </html>
-  `;
-  const blob = new Blob([html], { type: "application/vnd.ms-excel" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  styleAttendanceWorksheet(worksheet);
   const monthName = monthOptions[month].label.toLowerCase();
-  link.href = url;
-  link.download = `attendance-${monthName}-${year}.xls`;
-  link.click();
-  URL.revokeObjectURL(url);
+  await saveExcelWorkbook(workbook, `attendance-${monthName}-${year}.xlsx`);
 }
 
 function buildLeaveSummaries({ records, users, currentUser, year }) {
@@ -314,6 +318,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   const [attendanceMonth, setAttendanceMonth] = useState(new Date().getMonth());
   const [attendanceTeam, setAttendanceTeam] = useState("all");
   const [attendanceEmployee, setAttendanceEmployee] = useState("all");
+  const [excelDownloading, setExcelDownloading] = useState(false);
   const [holidays, setHolidays] = useState([]);
   const [holidayMessage, setHolidayMessage] = useState("");
   const [holidaySaving, setHolidaySaving] = useState(false);
@@ -543,18 +548,26 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
     }
   }
 
-  function downloadFilteredAttendance() {
-    if (!canManageAttendance) {
-      downloadRecordList(records);
-      return;
-    }
+  async function downloadFilteredAttendance() {
+    setExcelDownloading(true);
 
-    downloadAttendanceMatrix({
-      month: attendanceMonth,
-      people: selectedAttendancePeople,
-      records: filteredAttendanceRecords,
-      year: currentYear
-    });
+    try {
+      if (!canManageAttendance) {
+        await downloadRecordList(records);
+        return;
+      }
+
+      await downloadAttendanceMatrix({
+        month: attendanceMonth,
+        people: selectedAttendancePeople,
+        records: filteredAttendanceRecords,
+        year: currentYear
+      });
+    } catch {
+      setMessage("Could not prepare the Excel file. Please try again.");
+    } finally {
+      setExcelDownloading(false);
+    }
   }
 
   return (
@@ -767,12 +780,12 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
             ) : null}
             <button
               onClick={downloadFilteredAttendance}
-              disabled={canManageAttendance ? !selectedAttendancePeople.length : !records.length}
+              disabled={excelDownloading || (canManageAttendance ? !selectedAttendancePeople.length : !records.length)}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-teal-100 bg-[#064b36] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:-translate-y-0.5 hover:bg-[#0b5d43] disabled:cursor-not-allowed disabled:opacity-50"
               type="button"
             >
-              <Download size={17} />
-              Download Excel
+              {excelDownloading ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}
+              {excelDownloading ? "Preparing Excel..." : "Download Excel"}
             </button>
           </div>
         </div>
