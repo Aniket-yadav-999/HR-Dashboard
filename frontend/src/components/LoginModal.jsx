@@ -6,7 +6,7 @@ const logoUrl = "https://aagarg.in/wp-content/uploads/2025/05/A2G-New-Logo-Black
 
 function LoginModal({ embedded = false, onClose, onAuthenticated }) {
   const [step, setStep] = useState("credentials");
-  const [form, setForm] = useState({ email: "Aniket.Yadav@aagarg.in", password: "", otp: "" });
+  const [form, setForm] = useState({ email: "", password: "", otp: "" });
   const [challengeId, setChallengeId] = useState("");
   const [displayOtp, setDisplayOtp] = useState("");
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
