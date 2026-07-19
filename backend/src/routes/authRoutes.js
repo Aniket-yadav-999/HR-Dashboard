@@ -3,8 +3,8 @@ import { Session } from "../models/Session.js";
 import { User } from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
 import { scheduleOtpCleanup } from "../services/otpCleanup.js";
-import { sendOtpEmail } from "../services/mailService.js";
-import { generateOtp, generateToken, hashOtp, verifyPassword } from "../utils/password.js";
+import { sendOtpEmail, sendPasswordResetEmail } from "../services/mailService.js";
+import { generateOtp, generateToken, hashOtp, hashPassword, verifyPassword } from "../utils/password.js";
 
 const router = Router();
 
@@ -140,6 +140,44 @@ router.post("/resend-otp", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/forgot-password", async (req, res, next) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const genericMessage = "If an active account exists, a reset code has been sent.";
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    const user = await User.findOne({ email, status: { $ne: "exited" } });
+    if (!user) return res.json({ message: genericMessage });
+
+    const otp = generateOtp();
+    user.passwordResetOtpHash = hashOtp(otp);
+    user.passwordResetOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+    let emailQueued = true;
+    try { await sendPasswordResetEmail({ to: user.email, otp, name: user.name }); } catch { emailQueued = false; }
+    res.json({ message: genericMessage, displayOtp: emailQueued ? undefined : otp, emailQueued });
+  } catch (error) { next(error); }
+});
+
+router.post("/reset-password", async (req, res, next) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const { otp, password } = req.body;
+    if (!email || !otp || !password) return res.status(400).json({ message: "Email, reset code and new password are required" });
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
+      return res.status(400).json({ message: "Password must be 8+ characters with uppercase, lowercase and a number" });
+    }
+    const user = await User.findOne({ email, status: { $ne: "exited" }, passwordResetOtpExpiresAt: { $gt: new Date() } })
+      .select("+passwordResetOtpHash +passwordResetOtpExpiresAt");
+    if (!user || user.passwordResetOtpHash !== hashOtp(String(otp))) return res.status(400).json({ message: "Invalid or expired reset code" });
+    user.passwordHash = hashPassword(password);
+    user.passwordResetOtpHash = undefined;
+    user.passwordResetOtpExpiresAt = undefined;
+    await user.save();
+    await Session.deleteMany({ user: user._id });
+    res.json({ message: "Password reset successfully. Please sign in." });
+  } catch (error) { next(error); }
 });
 
 router.get("/me", requireAuth, (req, res) => {

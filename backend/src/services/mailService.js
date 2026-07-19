@@ -66,6 +66,18 @@ export async function sendOtpEmail({ to, otp, name }) {
   }
 }
 
+export async function sendPasswordResetEmail({ to, otp, name }) {
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+  const fromName = process.env.SMTP_FROM_NAME || "ITUS";
+  await getTransporter().sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    subject: "Reset your ITUS password",
+    text: `Hi ${name || "there"},\n\nYour password reset code is ${otp}. It expires in 10 minutes.\n\nIgnore this email if you did not request it.`,
+    html: `<div style="font-family:Arial,sans-serif;color:#15372b;line-height:1.6"><p>Hi ${name || "there"},</p><p>Use this code to reset your password:</p><p style="font-size:28px;font-weight:800;letter-spacing:5px;color:#064b36">${otp}</p><p>This code expires in 10 minutes.</p></div>`
+  });
+}
+
 export async function sendAttendanceEmail({ to, cc, subject, body }) {
   const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
   const fromName = process.env.SMTP_FROM_NAME || "ITUS";
