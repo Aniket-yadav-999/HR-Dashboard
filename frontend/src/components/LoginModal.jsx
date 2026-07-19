@@ -1,12 +1,14 @@
 import { KeyRound, Mail, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { requestLogin, resendOtp, verifyOtp } from "../services/api";
+import { requestLogin, requestPasswordReset, resendOtp, resetPassword, verifyOtp } from "../services/api";
 
 const logoUrl = "https://aagarg.in/wp-content/uploads/2025/05/A2G-New-Logo-Black.avif";
 
 function LoginModal({ embedded = false, onClose, onAuthenticated }) {
   const [step, setStep] = useState("credentials");
   const [form, setForm] = useState({ email: "", password: "", otp: "" });
+  const [resetForm, setResetForm] = useState({ otp: "", password: "", confirmPassword: "" });
+  const [notice, setNotice] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [displayOtp, setDisplayOtp] = useState("");
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
@@ -106,6 +108,27 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
     }
   }
 
+  async function handleForgot(event) {
+    event.preventDefault(); setError(""); setNotice(""); setLoading(true);
+    try {
+      const data = await requestPasswordReset({ email: form.email });
+      setNotice(data.displayOtp ? `${data.message} Temporary code: ${data.displayOtp}` : data.message);
+      setStep("reset");
+    } catch (requestError) { setError(requestError.response?.data?.message || "Could not start password reset"); }
+    finally { setLoading(false); }
+  }
+
+  async function handleReset(event) {
+    event.preventDefault(); setError(""); setNotice("");
+    if (resetForm.password !== resetForm.confirmPassword) { setError("Passwords do not match"); return; }
+    setLoading(true);
+    try {
+      const data = await resetPassword({ email: form.email, otp: resetForm.otp, password: resetForm.password });
+      setNotice(data.message); setForm((current) => ({ ...current, password: "", otp: "" })); setStep("credentials");
+    } catch (requestError) { setError(requestError.response?.data?.message || "Password reset failed"); }
+    finally { setLoading(false); }
+  }
+
   const content = (
       <div className="w-full max-w-5xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-emerald-900/20">
         <div className="grid lg:grid-cols-[0.95fr_1.05fr]">
@@ -135,9 +158,9 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
             <div className="mb-8 flex items-start justify-between gap-4">
               <div className="relative">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-[#064b36]">Secure Access</p>
-                <h2 className="mt-2 text-4xl font-black text-[#15372b]">{step === "credentials" ? "Welcome back" : "Verify OTP"}</h2>
+                <h2 className="mt-2 text-4xl font-black text-[#15372b]">{step === "credentials" ? "Welcome back" : step === "otp" ? "Verify OTP" : step === "forgot" ? "Forgot password" : "Create new password"}</h2>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
-                  {step === "credentials" ? "Login with your email and password to continue." : "Enter the OTP sent to your registered email. The code is valid for 5 minutes."}
+                  {step === "credentials" ? "Login with your email and password to continue." : step === "otp" ? "Enter the OTP sent to your registered email. The code is valid for 5 minutes." : step === "forgot" ? "Enter your registered email to receive a secure reset code." : "Enter the 6-digit code and choose a strong new password."}
                 </p>
               </div>
               {!embedded ? (
@@ -153,6 +176,7 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
             </div>
 
             {error ? <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</div> : null}
+            {notice ? <div className="mb-4 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{notice}</div> : null}
             {step === "otp" && displayOtp ? (
               <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-900">
                 <span className="font-semibold">Your login OTP: </span>
@@ -194,8 +218,9 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
             <button className="w-full rounded-2xl bg-[#064b36] px-4 py-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-[#0b5d43]" type="submit">
               {loading ? "Sending OTP..." : "Send OTP"}
             </button>
+            <button onClick={() => { setStep("forgot"); setError(""); }} className="w-full text-sm font-black text-[#064b36] hover:underline" type="button">Forgot password?</button>
           </form>
-        ) : (
+        ) : step === "otp" ? (
           <form onSubmit={handleVerify} className="space-y-5">
             <div>
               <span className="mb-3 block text-sm font-semibold text-slate-700">OTP</span>
@@ -233,6 +258,20 @@ function LoginModal({ embedded = false, onClose, onAuthenticated }) {
               <RefreshCw size={17} className={resending ? "animate-spin" : ""} />
               {resending ? "Resending OTP..." : "Resend OTP"}
             </button>
+          </form>
+        ) : step === "forgot" ? (
+          <form onSubmit={handleForgot} className="space-y-5">
+            <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Registered email</span><input className="w-full rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm outline-none focus:border-[#064b36]" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
+            <button className="w-full rounded-2xl bg-[#064b36] px-4 py-4 text-sm font-black text-white" type="submit">{loading ? "Sending..." : "Send reset code"}</button>
+            <button onClick={() => setStep("credentials")} className="w-full text-sm font-black text-[#064b36]" type="button">Back to login</button>
+          </form>
+        ) : (
+          <form onSubmit={handleReset} className="space-y-4">
+            <input className="w-full rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm" inputMode="numeric" maxLength={6} placeholder="6-digit reset code" value={resetForm.otp} onChange={(event) => setResetForm({ ...resetForm, otp: event.target.value.replace(/\D/g, "") })} required />
+            <input className="w-full rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm" type="password" placeholder="New password" value={resetForm.password} onChange={(event) => setResetForm({ ...resetForm, password: event.target.value })} required />
+            <input className="w-full rounded-2xl border border-slate-200 bg-[#f6f8f4] px-4 py-4 text-sm" type="password" placeholder="Confirm new password" value={resetForm.confirmPassword} onChange={(event) => setResetForm({ ...resetForm, confirmPassword: event.target.value })} required />
+            <p className="text-xs text-slate-500">Use 8+ characters with uppercase, lowercase and a number.</p>
+            <button className="w-full rounded-2xl bg-[#064b36] px-4 py-4 text-sm font-black text-white" type="submit">{loading ? "Resetting..." : "Reset password"}</button>
           </form>
         )}
           </div>

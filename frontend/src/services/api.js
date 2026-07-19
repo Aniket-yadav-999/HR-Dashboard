@@ -31,6 +31,16 @@ export async function resendOtp(payload) {
   return response.data;
 }
 
+export async function requestPasswordReset(payload) {
+  const response = await api.post("/auth/forgot-password", payload);
+  return response.data;
+}
+
+export async function resetPassword(payload) {
+  const response = await api.post("/auth/reset-password", payload);
+  return response.data;
+}
+
 export async function logout() {
   const response = await api.post("/auth/logout");
   return response.data;
@@ -73,6 +83,11 @@ export async function createAttendance(payload) {
 
 export async function getAttendance() {
   const response = await api.get("/attendance");
+  return response.data;
+}
+
+export async function updateAttendanceStatus(id, payload) {
+  const response = await api.patch(`/attendance/${id}/status`, payload);
   return response.data;
 }
 

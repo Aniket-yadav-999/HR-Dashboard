@@ -18,7 +18,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { createAttendance, createHoliday, deleteHoliday, getAttendance, getHolidays, updateHoliday } from "../services/api";
+import { createAttendance, createHoliday, deleteHoliday, getAttendance, getHolidays, updateAttendanceStatus, updateHoliday } from "../services/api";
 
 const options = [
   { value: "present", label: "Present", tone: "from-emerald-700 to-lime-400", chip: "bg-emerald-50 text-emerald-700" },
@@ -287,13 +287,12 @@ function buildLeaveSummaries({ records, users, currentUser, year }) {
         sickUsed: 0
       };
 
-    if (record.type === "paid_leave") {
-      person.paidUsed += 1;
-    }
-
-    if (record.type === "sick_leave") {
-      person.sickUsed += 1;
-    }
+    if (!["approved", "not_required"].includes(record.approvalStatus || "not_required")) return;
+    const start = new Date(record.fromDate || record.date);
+    const end = new Date(record.toDate || record.date);
+    const duration = record.dayPortion && record.dayPortion !== "full_day" ? 0.5 : Math.max(1, Math.floor((end - start) / 86400000) + 1);
+    if (record.type === "paid_leave") person.paidUsed += duration;
+    if (record.type === "sick_leave") person.sickUsed += duration;
 
     people.set(key, person);
   });
@@ -312,6 +311,8 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   const [selectedType, setSelectedType] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState({ reason: "", clientName: "", location: "" });
+  const [leaveDates, setLeaveDates] = useState({ fromDate: new Date().toISOString().slice(0, 10), toDate: new Date().toISOString().slice(0, 10), dayPortion: "full_day" });
+  const [actionRecord, setActionRecord] = useState("");
   const [template, setTemplate] = useState({ subject: "", body: "" });
   const [templateEditable, setTemplateEditable] = useState(false);
   const [message, setMessage] = useState("");
@@ -334,6 +335,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
   const today = new Date();
   const todayKey = today.toISOString().slice(0, 10);
   const isVisit = ["client_visit", "spot_visit"].includes(selectedType);
+  const isApprovalRequest = ["work_from_home", "paid_leave", "sick_leave", "half_day"].includes(selectedType);
   const selectedOption = options.find((option) => option.value === selectedType);
   const canManageHolidays = ["admin", "hr"].includes(user.role);
   const canManageAttendance = ["admin", "hr"].includes(user.role);
@@ -538,7 +540,8 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
               clientName: detail.clientName,
               location: detail.location,
               mailSubject: template.subject,
-              mailBody: template.body
+              mailBody: template.body,
+              ...leaveDates
             };
       await createAttendance(payload);
       setMessage(typeOverride === "present" ? "Present marked. HR and manager notified." : "Attendance request submitted and notification sent.");
@@ -550,6 +553,17 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleStatusAction(record, action) {
+    const comment = window.prompt(action === "reject" ? "Rejection reason (required):" : "Comment (optional):", "");
+    if (comment === null || (action === "reject" && !comment.trim())) return;
+    setActionRecord(record.id); setMessage("");
+    try {
+      await updateAttendanceStatus(record.id, { action, comment });
+      setMessage(`Request ${action} action completed.`); await loadRecords(); onSubmitted();
+    } catch (error) { setMessage(error.response?.data?.message || "Could not update request."); }
+    finally { setActionRecord(""); }
   }
 
   async function downloadFilteredAttendance() {
@@ -798,7 +812,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-[#064b36]">
               <tr>
-                {["Date", "Employee Name", "Status"].map((heading) => (
+                {["Date / Duration", "Employee Name", "Attendance", "Approval", "Comments", "Actions"].map((heading) => (
                   <th key={heading} className="px-5 py-4 text-left text-xs font-bold uppercase tracking-widest text-white">{heading}</th>
                 ))}
               </tr>
@@ -806,7 +820,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
             <tbody className="divide-y divide-slate-100 bg-white">
               {recordsLoading ? (
                 <tr>
-                  <td className="px-5 py-8 text-sm font-semibold text-slate-500" colSpan="3">
+                  <td className="px-5 py-8 text-sm font-semibold text-slate-500" colSpan="6">
                     <span className="inline-flex items-center gap-2"><Loader2 size={17} className="animate-spin text-[#064b36]" /> Loading records</span>
                   </td>
                 </tr>
@@ -815,7 +829,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
                   const option = options.find((item) => item.value === record.type);
                   return (
                     <tr key={record.id} className="transition hover:bg-[#eff6df]">
-                      <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">{formatDate(record.date)}</td>
+                      <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">{formatDate(record.fromDate || record.date)}{record.toDate && new Date(record.toDate).toDateString() !== new Date(record.fromDate || record.date).toDateString() ? ` – ${formatDate(record.toDate)}` : ""}<p className="mt-1 text-xs capitalize text-slate-400">{record.dayPortion?.replace("_", " ")}</p></td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#eff6df] text-[#064b36]">
@@ -832,12 +846,21 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
                           {record.label}
                         </span>
                       </td>
+                      <td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black capitalize text-slate-700">{(record.approvalStatus || "not_required").replace(/_/g, " ")}</span></td>
+                      <td className="max-w-56 px-5 py-4 text-xs text-slate-500">{record.managerComment ? <p><b>Manager:</b> {record.managerComment}</p> : null}{record.hrComment ? <p className="mt-1"><b>HR:</b> {record.hrComment}</p> : null}{!record.managerComment && !record.hrComment ? "—" : null}</td>
+                      <td className="px-5 py-4"><div className="flex min-w-48 flex-wrap gap-2">
+                        {record.approvalStatus === "pending_manager" && user.role === "manager" && record.employeeEmail !== user.email ? <><button onClick={() => handleStatusAction(record, "approve")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white">Approve</button><button onClick={() => handleStatusAction(record, "reject")} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-black text-white">Reject</button></> : null}
+                        {record.approvalStatus === "pending_hr" && ["admin", "hr"].includes(user.role) ? <><button onClick={() => handleStatusAction(record, "approve")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white">Approve</button><button onClick={() => handleStatusAction(record, "reject")} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-black text-white">Reject</button></> : null}
+                        {record.employeeEmail === user.email && ["pending_manager", "pending_hr"].includes(record.approvalStatus) ? <button onClick={() => handleStatusAction(record, "withdraw")} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-black text-white">Withdraw</button> : null}
+                        {record.employeeEmail === user.email && record.approvalStatus === "approved" ? <button onClick={() => handleStatusAction(record, "cancel")} className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-black text-white">Cancel</button> : null}
+                        {actionRecord === record.id ? <Loader2 size={16} className="animate-spin" /> : null}
+                      </div></td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td className="px-5 py-8 text-sm font-semibold text-slate-500" colSpan="3">{canManageAttendance ? "No attendance records match the selected filters." : "No attendance records yet."}</td>
+                  <td className="px-5 py-8 text-sm font-semibold text-slate-500" colSpan="6">{canManageAttendance ? "No attendance records match the selected filters." : "No attendance records yet."}</td>
                 </tr>
               )}
             </tbody>
@@ -896,12 +919,21 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
                 </div>
               </div>
             ) : (
+              <div className="mt-5 space-y-3">
+              {isApprovalRequest ? <>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs font-bold text-slate-500">From date<input type="date" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3" value={leaveDates.fromDate} onChange={(event) => setLeaveDates({ ...leaveDates, fromDate: event.target.value, toDate: event.target.value > leaveDates.toDate ? event.target.value : leaveDates.toDate })} required /></label>
+                  <label className="text-xs font-bold text-slate-500">To date<input type="date" min={leaveDates.fromDate} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3" value={leaveDates.toDate} onChange={(event) => setLeaveDates({ ...leaveDates, toDate: event.target.value })} required /></label>
+                </div>
+                <label className="block text-xs font-bold text-slate-500">Day selection<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-3" value={leaveDates.dayPortion} onChange={(event) => setLeaveDates({ ...leaveDates, dayPortion: event.target.value })}><option value="full_day">Full day</option><option value="first_half">First half</option><option value="second_half">Second half</option></select></label>
+              </> : null}
               <textarea
                 className="mt-5 min-h-36 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none focus:border-[#064b36] focus:bg-white focus:ring-4 focus:ring-emerald-900/10"
                 placeholder="Write your reason"
                 value={detail.reason}
                 onChange={(event) => updateDetail("reason", event.target.value)}
               />
+              </div>
             )}
             <button
               onClick={() => setDetailOpen(false)}
