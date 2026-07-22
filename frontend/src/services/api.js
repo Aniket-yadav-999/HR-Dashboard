@@ -151,6 +151,11 @@ export async function updateAsset(id, payload) {
   return response.data;
 }
 
+export async function bulkReplaceAssets(assets) {
+  const response = await api.post("/assets/bulk", { assets });
+  return response.data;
+}
+
 export async function getNotifications() {
   const response = await api.get("/notifications");
   return response.data;

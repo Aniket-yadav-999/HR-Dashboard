@@ -1,6 +1,6 @@
-import { CheckCircle2, Laptop, Loader2, PackageCheck, Plus, RefreshCw, ShieldCheck, Wrench } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { createAsset, getAssets, updateAsset } from "../services/api";
+import { CheckCircle2, FileSpreadsheet, Laptop, Loader2, PackageCheck, Plus, RefreshCw, Upload, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { bulkReplaceAssets, createAsset, getAssets, updateAsset } from "../services/api";
 
 const categories = ["laptop", "desktop", "accessory", "mouse", "other"];
 const statuses = ["available", "issued", "maintenance", "returned", "retired"];
@@ -19,6 +19,26 @@ const emptyForm = {
   ipAddress: "",
   notes: ""
 };
+
+const excelColumns = [
+  ["Asset ID", "assetId"], ["Asset Name", "name"], ["Category", "category"],
+  ["Brand/Model", "brandModel"], ["Serial Number", "serialNumber"], ["Assigned To", "assignedTo"],
+  ["Department", "department"], ["Location", "location"], ["Status", "status"],
+  ["Condition", "condition"], ["IP Address", "ipAddress"], ["Notes", "notes"]
+];
+
+function cellText(cell) {
+  if (cell.value && typeof cell.value === "object") {
+    if ("text" in cell.value) return String(cell.value.text).trim();
+    if ("result" in cell.value) return String(cell.value.result ?? "").trim();
+    if (Array.isArray(cell.value.richText)) return cell.value.richText.map((part) => part.text).join("").trim();
+  }
+  return String(cell.text ?? cell.value ?? "").trim();
+}
+
+function normalizeOption(value) {
+  return value.toLowerCase().trim().replace(/[\s-]+/g, "_");
+}
 
 function titleCase(value) {
   return value.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
@@ -41,6 +61,8 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const canManage = ["admin", "hr"].includes(currentUser.role);
 
   const stats = useMemo(() => ({
@@ -116,6 +138,53 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
     }
   }
 
+  async function uploadExcel(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(true);
+    setMessage("");
+    try {
+      const { default: ExcelJS } = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await file.arrayBuffer());
+      const sheet = workbook.getWorksheet("Sheet1");
+      if (!sheet) throw new Error('Worksheet "Sheet1" was not found.');
+
+      const actualHeaders = excelColumns.map((_, index) => cellText(sheet.getCell(2, index + 1)));
+      const invalidHeader = excelColumns.findIndex(([header], index) => actualHeaders[index].toLowerCase() !== header.toLowerCase());
+      if (invalidHeader !== -1) {
+        throw new Error(`Row 2 column ${invalidHeader + 1} must be "${excelColumns[invalidHeader][0]}".`);
+      }
+
+      const rows = [];
+      for (let rowNumber = 3; rowNumber <= sheet.rowCount; rowNumber += 1) {
+        const values = excelColumns.map((_, index) => cellText(sheet.getCell(rowNumber, index + 1)));
+        if (values.every((value) => !value)) continue;
+        const asset = Object.fromEntries(excelColumns.map(([, key], index) => [key, values[index]]));
+        asset.category = normalizeOption(asset.category || "laptop");
+        asset.status = normalizeOption(asset.status || "available");
+        asset.condition = normalizeOption(asset.condition || "good");
+        if (!categories.includes(asset.category)) throw new Error(`Invalid Category on row ${rowNumber}.`);
+        if (!statuses.includes(asset.status)) throw new Error(`Invalid Status on row ${rowNumber}.`);
+        if (!conditions.includes(asset.condition)) throw new Error(`Invalid Condition on row ${rowNumber}.`);
+        if (!asset.assetId || !asset.name) throw new Error(`Asset ID and Asset Name are required on row ${rowNumber}.`);
+        rows.push(asset);
+      }
+
+      if (!rows.length) throw new Error("No asset data found below row 2.");
+      const result = await bulkReplaceAssets(rows);
+      setMessage(result.message);
+      await loadAssets();
+      onChanged?.();
+    } catch (error) {
+      setMessage(error.response?.data?.message || error.message || "Could not upload Excel file.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="overflow-hidden rounded-3xl border border-[#064b36] bg-[#064b36] p-6 text-white shadow-xl shadow-emerald-900/25">
@@ -127,11 +196,24 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
               Manage company assets with ownership, lifecycle status, condition, and employee notifications.
             </p>
           </div>
-          <button onClick={loadAssets} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#bfff2f] px-5 py-4 text-sm font-black text-[#064b36] shadow-lg shadow-emerald-950/20" type="button">
-            <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-3">
+            {canManage ? (
+              <>
+                <input ref={fileInputRef} className="hidden" type="file" accept=".xlsx" onChange={uploadExcel} />
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-4 text-sm font-black text-[#064b36] shadow-lg disabled:cursor-not-allowed disabled:opacity-70" type="button">
+                  {uploading ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
+                  {uploading ? "Uploading..." : "Bulk Upload Excel"}
+                </button>
+              </>
+            ) : null}
+            <button onClick={loadAssets} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#bfff2f] px-5 py-4 text-sm font-black text-[#064b36] shadow-lg shadow-emerald-950/20" type="button">
+              <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+              Refresh
+            </button>
+          </div>
         </div>
+        {canManage ? <p className="mt-4 flex items-center gap-2 text-xs font-bold text-emerald-50/80"><FileSpreadsheet size={15} /> Upload .xlsx with headers on Sheet1 row 2. A successful upload replaces the current inventory.</p> : null}
+        {message ? <p className="mt-3 rounded-xl bg-white/10 px-4 py-3 text-sm font-bold text-white">{message}</p> : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -188,7 +270,6 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
                 Save Asset
               </button>
             </div>
-            {message ? <p className="mt-3 text-sm font-black text-[#064b36]">{message}</p> : null}
           </form>
         ) : null}
 
