@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarDays, Mail, Plus, ShieldCheck, UserRound, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Mail, MapPin, Plus, ShieldCheck, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createUser, updateUser } from "../services/api";
 
@@ -9,6 +9,7 @@ const initialForm = {
   role: "employee",
   status: "active",
   department: "",
+  location: "",
   designation: "",
   teamName: "",
   managerEmail: "",
@@ -29,6 +30,7 @@ function toForm(user) {
     role: user.role || "employee",
     status: user.status || "active",
     department: user.department || "",
+    location: user.location || "",
     designation: user.designation || "",
     teamName: user.teamName || "",
     managerEmail: user.managerEmail || "",
@@ -132,6 +134,7 @@ function AdminPanel({ currentUser, open, editingUser, onClose, onUserCreated, on
                 ["email", "Email", "email", Mail],
                 ["password", "Password", "password", ShieldCheck],
                 ["department", "Department", "text", BriefcaseBusiness],
+                ["location", "Location", "text", MapPin],
                 ["designation", "Designation", "text", UserRound],
                 ["teamName", "Team Name", "text", BriefcaseBusiness],
                 ["managerName", "Manager Name", "text", UserRound],
