@@ -43,6 +43,11 @@ const userSchema = new mongoose.Schema(
       default: "People Operations",
       trim: true
     },
+    location: {
+      type: String,
+      default: "",
+      trim: true
+    },
     designation: {
       type: String,
       default: "Employee",

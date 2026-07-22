@@ -16,6 +16,7 @@ function publicUser(user) {
     role: user.role,
     status: user.status,
     department: user.department,
+    location: user.location,
     designation: user.designation,
     teamName: user.teamName,
     managerEmail: user.managerEmail,
