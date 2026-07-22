@@ -78,6 +78,19 @@ function buildPayload(body) {
   return payload;
 }
 
+async function resolveAssignedUser(value) {
+  const lookup = String(value || "").trim();
+  if (!lookup) return null;
+
+  const escaped = lookup.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return User.findOne({
+    $or: [
+      { email: lookup.toLowerCase() },
+      { name: { $regex: `^${escaped}$`, $options: "i" } }
+    ]
+  });
+}
+
 async function notifyRecipients({ actor, recipients, title, message }) {
   const uniqueRecipients = recipients
     .filter(Boolean)
@@ -140,6 +153,50 @@ router.post("/", requireAuth, requireHrOrAdmin, async (req, res, next) => {
     });
 
     res.status(201).json(toAsset(populated));
+  } catch (error) {
+    if (error.message === "Asset ID and name are required") {
+      return res.status(400).json({ message: error.message });
+    }
+    next(error);
+  }
+});
+
+router.post("/bulk", requireAuth, requireHrOrAdmin, async (req, res, next) => {
+  try {
+    if (!Array.isArray(req.body.assets) || !req.body.assets.length) {
+      return res.status(400).json({ message: "Excel file does not contain any asset rows" });
+    }
+
+    const seenIds = new Set();
+    const rows = [];
+
+    for (const [index, item] of req.body.assets.entries()) {
+      const payload = buildPayload(item);
+      const normalizedId = payload.assetId.toLowerCase();
+      if (seenIds.has(normalizedId)) {
+        return res.status(400).json({ message: `Duplicate Asset ID on Excel row ${index + 3}: ${payload.assetId}` });
+      }
+      seenIds.add(normalizedId);
+
+      const assignedTo = await resolveAssignedUser(item.assignedTo);
+      if (item.assignedTo && !assignedTo) {
+        return res.status(400).json({ message: `Assigned To user not found on Excel row ${index + 3}: ${item.assignedTo}` });
+      }
+
+      rows.push({
+        ...payload,
+        assignedTo: assignedTo?._id,
+        department: payload.department || assignedTo?.department || "",
+        status: assignedTo ? "issued" : payload.status,
+        issuedAt: assignedTo ? payload.issuedAt || new Date() : payload.issuedAt,
+        createdBy: req.user._id
+      });
+    }
+
+    await Asset.deleteMany({});
+    const inserted = await Asset.insertMany(rows);
+
+    res.status(201).json({ message: `${inserted.length} assets uploaded successfully`, count: inserted.length });
   } catch (error) {
     if (error.message === "Asset ID and name are required") {
       return res.status(400).json({ message: error.message });
