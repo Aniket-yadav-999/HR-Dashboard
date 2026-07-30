@@ -175,3 +175,53 @@ export async function getNotifications() {
   const response = await api.get("/notifications");
   return response.data;
 }
+
+export async function getHrDocuments() {
+  const response = await api.get("/hr-operations/documents");
+  return response.data;
+}
+
+export async function uploadHrDocument(formData) {
+  const response = await api.post("/hr-operations/documents", formData);
+  return response.data;
+}
+
+export async function downloadHrDocument(id, fileName) {
+  const response = await api.get(`/hr-operations/documents/${id}/download`, { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function getAppraisals() {
+  const response = await api.get("/hr-operations/appraisals");
+  return response.data;
+}
+
+export async function createAppraisal(payload) {
+  const response = await api.post("/hr-operations/appraisals", payload);
+  return response.data;
+}
+
+export async function updateAppraisal(id, payload) {
+  const response = await api.patch(`/hr-operations/appraisals/${id}`, payload);
+  return response.data;
+}
+
+export async function getReimbursements() {
+  const response = await api.get("/hr-operations/reimbursements");
+  return response.data;
+}
+
+export async function createReimbursement(payload) {
+  const response = await api.post("/hr-operations/reimbursements", payload);
+  return response.data;
+}
+
+export async function updateReimbursement(id, payload) {
+  const response = await api.patch(`/hr-operations/reimbursements/${id}`, payload);
+  return response.data;
+}

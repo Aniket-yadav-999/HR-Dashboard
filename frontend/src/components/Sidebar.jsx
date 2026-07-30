@@ -1,4 +1,4 @@
-import { BarChart3, Bell, CalendarDays, ChevronLeft, ChevronRight, Headphones, HeartHandshake, Laptop, Network } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, ChevronLeft, ChevronRight, FileText, HandCoins, Headphones, HeartHandshake, Laptop, Network, Star } from "lucide-react";
 
 const items = [
   { label: "Overview", value: "overview", icon: BarChart3 },
@@ -8,6 +8,9 @@ const items = [
   { label: "AAGarg Organization", value: "organization", icon: Network },
   { label: "Asset Management", value: "assets", icon: Laptop, roles: ["admin", "hr"] },
   { label: "Helpdesk & Requests", value: "helpdesk", icon: Headphones },
+  { label: "Document & Policy", value: "documents", icon: FileText, roles: ["admin", "hr"] },
+  { label: "Appraisal", value: "appraisals", icon: Star, roles: ["admin", "hr"] },
+  { label: "Reimbursement", value: "reimbursements", icon: HandCoins, roles: ["admin", "hr"] },
   { label: "Notifications", value: "notifications", icon: Bell }
 ];
 
@@ -39,7 +42,7 @@ function Sidebar({ collapsed, activeView, onViewChange, onToggle, currentUser })
         ) : null}
       </div>
 
-      <nav className="space-y-3">
+      <nav className="max-h-[calc(100vh-12rem)] space-y-3 overflow-y-auto pr-1">
         {visibleItems.map((item) => {
           const Icon = item.icon;
           return (
