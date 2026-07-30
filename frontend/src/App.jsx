@@ -7,6 +7,7 @@ import EmployeeEngagement from "./components/EmployeeEngagement";
 import EmployeeIdCard from "./components/EmployeeIdCard";
 import EmployeeOverview from "./components/EmployeeOverview";
 import HelpdeskRequests from "./components/HelpdeskRequests";
+import HrOperations from "./components/HrOperations";
 import LoginModal from "./components/LoginModal";
 import NotificationsPanel from "./components/NotificationsPanel";
 import OrganizationTree from "./components/OrganizationTree";
@@ -221,6 +222,9 @@ function App() {
               {activeView === "organization" ? <OrganizationTree currentUser={user} users={users} /> : null}
               {activeView === "assets" && ["admin", "hr"].includes(user.role) ? <AssetManagement currentUser={user} users={users} onChanged={loadNotifications} /> : null}
               {activeView === "helpdesk" ? <HelpdeskRequests currentUser={user} onChanged={loadNotifications} /> : null}
+              {["documents", "appraisals", "reimbursements"].includes(activeView) && ["admin", "hr"].includes(user.role) ? (
+                <HrOperations activeSection={activeView} currentUser={user} users={users} />
+              ) : null}
               {activeView === "notifications" ? <NotificationsPanel notifications={notifications} /> : null}
               {activeView === "profile" ? <EmployeeIdCard user={user} /> : null}
             </div>
