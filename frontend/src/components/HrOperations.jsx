@@ -1,8 +1,8 @@
-import { CheckCircle2, Download, FileUp, IndianRupee, Plus, Search, Star, XCircle } from "lucide-react";
+import { CheckCircle2, Download, FileText, FileUp, IndianRupee, Pencil, Plus, Save, Search, Star, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   createAppraisal, createReimbursement, downloadHrDocument, getAppraisals, getHrDocuments,
-  getReimbursements, updateAppraisal, updateReimbursement, uploadHrDocument
+  getReimbursements, updateAppraisal, updateHrDocument, updateReimbursement, uploadHrDocument
 } from "../services/api";
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[#0b5d43] focus:ring-2 focus:ring-emerald-100";
@@ -26,7 +26,7 @@ function Badge({ value }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black capitalize ${statusColor[value] || "bg-slate-100 text-slate-700"}`}>{value?.replaceAll("_", " ")}</span>;
 }
 
-function Documents() {
+function LegacyDocuments() {
   const [items, setItems] = useState([]);
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
@@ -68,6 +68,75 @@ function Documents() {
       </div>
     </>
   );
+}
+
+const policyTabs = [
+  ["paid-leave", "Paid Leave", "This leave will be paid when not used"],
+  ["sick-leave", "Sick Leave", "Health-related leave policy and eligibility"],
+  ["paternity", "Paternity", "Paternity leave entitlement and process"],
+  ["unpaid", "Unpaid", "Leave without pay policy and approval process"],
+  ["holiday-hr", "Holiday HR", "Company holiday calendar and HR guidelines"]
+];
+
+const paidLeaveCopy = `Leave Quota
+You are allocated a total of 18 days of leave in a year beginning Jan 2026 till Dec 2026. You can consume this leave in the same year it is accrued or credited.
+
+You are allowed to have more than the annual quota of leave if additional leave is granted manually by management.
+
+Leave Accrual
+Your annual quota is 18 days. Paid Leave accrues once every month on the 1st, at the rate of 1.5 days. Only leave accrued as of the request date can be used; future accruals are not considered.`;
+
+function PolicyDocuments({ currentUser }) {
+  const [items, setItems] = useState([]);
+  const [activeTab, setActiveTab] = useState("paid-leave");
+  const [form, setForm] = useState({ title: "Paid Leave", description: "", policyContent: paidLeaveCopy });
+  const [file, setFile] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const load = async () => setItems(await getHrDocuments());
+  useEffect(() => { load().catch(() => setMessage("Could not load policies.")); }, []);
+  const tab = policyTabs.find(([id]) => id === activeTab);
+  const policy = items.find((item) => (item.category || "paid-leave") === activeTab);
+  const isAdmin = currentUser?.role === "admin";
+
+  function openEditor() {
+    setForm({ title: policy?.title || tab[1], description: policy?.description || tab[2], policyContent: policy?.policyContent || (activeTab === "paid-leave" ? paidLeaveCopy : "") });
+    setFile(null); setMessage(""); setEditing(true);
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!policy && !file) return setMessage("Please select a policy file for the first upload.");
+    setBusy(true); setMessage("");
+    const body = new FormData();
+    if (file) body.append("file", file);
+    body.append("category", activeTab);
+    Object.entries(form).forEach(([key, value]) => body.append(key, value));
+    try {
+      if (policy) await updateHrDocument(policy.id, body); else await uploadHrDocument(body);
+      setEditing(false); setFile(null); setMessage(policy ? "Policy updated successfully." : "Policy uploaded successfully."); await load();
+    } catch (error) { setMessage(error.response?.data?.message || "Could not save the policy."); } finally { setBusy(false); }
+  }
+
+  return <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#0b5d43]">HR knowledge hub</p><h1 className="mt-1 text-2xl font-black text-[#15372b]">Document &amp; Policy</h1></div>
+      {isAdmin ? <button type="button" onClick={openEditor} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#064b36] px-4 py-2.5 text-sm font-bold text-white"><Pencil size={16} />{policy ? "Edit policy" : "Upload policy"}</button> : null}
+    </div>
+    <div className="overflow-x-auto border-b border-slate-200 px-5 pt-5"><div className="flex min-w-max" role="tablist" aria-label="Leave policies">{policyTabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => { setActiveTab(id); setEditing(false); setMessage(""); }} className={`border border-b-0 px-5 py-3 text-sm font-bold transition first:rounded-tl-lg last:rounded-tr-lg ${activeTab === id ? "border-[#064b36] bg-[#064b36] text-white" : "border-slate-200 bg-white text-[#0b5d43] hover:bg-emerald-50"}`}>{label}</button>)}</div></div>
+    {message ? <p className="mx-5 mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
+    {editing && isAdmin ? <form onSubmit={submit} className="m-5 grid gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+      <div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-bold text-slate-700">Policy title<input required className={`${inputClass} mt-2`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label><label className="text-sm font-bold text-slate-700">Short introduction<input className={`${inputClass} mt-2`} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label></div>
+      <label className="text-sm font-bold text-slate-700">Policy details<textarea rows="8" className={`${inputClass} mt-2 resize-y leading-6`} value={form.policyContent} onChange={(e) => setForm({ ...form, policyContent: e.target.value })} placeholder="Add the full policy details here..." /></label>
+      <label className="text-sm font-bold text-slate-700">{policy ? "Replace attachment (optional)" : "Policy attachment"}<input required={!policy} className={`${inputClass} mt-2 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-100 file:px-3 file:py-1 file:font-bold file:text-[#064b36]`} type="file" onChange={(e) => setFile(e.target.files[0])} /></label>
+      <div className="flex justify-end gap-3"><button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-600">Cancel</button><button disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-[#bfff2f] px-4 py-2.5 text-sm font-black text-[#064b36] disabled:opacity-60">{policy ? <Save size={17} /> : <FileUp size={17} />}{busy ? "Saving..." : "Save policy"}</button></div>
+    </form> : <div className="p-5 sm:p-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-3xl font-black text-[#172d25]">{policy?.title || tab[1]}</h2><p className="mt-3 text-sm text-slate-600">{policy?.description || tab[2]}</p></div>{policy ? <button type="button" onClick={() => downloadHrDocument(policy.id, policy.fileName)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-[#064b36]"><Download size={17} />Download policy</button> : null}</div>
+      <div className="mt-10 max-w-5xl whitespace-pre-line text-[15px] leading-7 text-slate-700">{policy?.policyContent || (activeTab === "paid-leave" ? paidLeaveCopy : <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center"><FileText className="mx-auto mb-3 text-slate-400" size={32} /><p className="font-bold text-slate-600">Policy details will be added soon.</p>{isAdmin ? <p className="mt-1 text-sm text-slate-400">Use “Upload policy” to publish this section.</p> : null}</div>)}</div>
+      {policy ? <p className="mt-10 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-400">{policy.fileName} · {(policy.size / 1024).toFixed(1)} KB · Updated {new Date(policy.createdAt).toLocaleDateString("en-IN")}</p> : null}
+    </div>}
+  </section>;
 }
 
 function Appraisals({ users }) {
@@ -124,6 +193,6 @@ function Reimbursements({ users }) {
   );
 }
 
-export default function HrOperations({ activeSection, users }) {
-  return <div className="space-y-6">{activeSection === "documents" ? <Documents /> : activeSection === "appraisals" ? <Appraisals users={users} /> : <Reimbursements users={users} />}</div>;
+export default function HrOperations({ activeSection, currentUser, users }) {
+  return <div className="space-y-6">{activeSection === "documents" ? <PolicyDocuments currentUser={currentUser} /> : activeSection === "appraisals" ? <Appraisals users={users} /> : <Reimbursements users={users} />}</div>;
 }

@@ -186,6 +186,11 @@ export async function uploadHrDocument(formData) {
   return response.data;
 }
 
+export async function updateHrDocument(id, formData) {
+  const response = await api.patch(`/hr-operations/documents/${id}`, formData);
+  return response.data;
+}
+
 export async function downloadHrDocument(id, fileName) {
   const response = await api.get(`/hr-operations/documents/${id}/download`, { responseType: "blob" });
   const url = URL.createObjectURL(response.data);
