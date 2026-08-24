@@ -1,6 +1,7 @@
 import { CheckCircle2, Headphones, Loader2, Plus, RefreshCw, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createHelpdeskTicket, getHelpdeskTickets, updateHelpdeskTicket } from "../services/api";
+import { PaginationControls, usePagination } from "./Pagination";
 
 const categories = [
   { value: "hr", label: "HR", color: "#064b36" },
@@ -50,6 +51,7 @@ function HelpdeskRequests({ currentUser, onChanged }) {
   }), [tickets]);
 
   const visibleTickets = selectedCategory === "all" ? tickets : tickets.filter((ticket) => ticket.category === selectedCategory);
+  const ticketPages = usePagination(visibleTickets, 8);
 
   async function loadTickets() {
     setLoading(true);
@@ -164,7 +166,7 @@ function HelpdeskRequests({ currentUser, onChanged }) {
           {message ? <p className="mt-3 text-sm font-black text-[#064b36]">{message}</p> : null}
         </form>
 
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+        <div ref={ticketPages.anchorRef} className="scroll-mt-24 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-[#064b36]">Ticket Desk</p>
@@ -181,7 +183,7 @@ function HelpdeskRequests({ currentUser, onChanged }) {
           </div>
 
           <div className="space-y-4 bg-[#f7f9f5] p-4 sm:p-5">
-            {visibleTickets.map((ticket) => (
+            {ticketPages.pageItems.map((ticket) => (
               <article key={ticket.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-lg">
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
                   <div className="min-w-0">
@@ -234,6 +236,7 @@ function HelpdeskRequests({ currentUser, onChanged }) {
               </div>
             ) : null}
           </div>
+          <PaginationControls page={ticketPages.page} totalPages={ticketPages.totalPages} totalItems={visibleTickets.length} pageSize={8} onPageChange={ticketPages.changePage} isPending={ticketPages.isPending} />
         </div>
       </div>
     </section>

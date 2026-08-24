@@ -4,6 +4,7 @@ import {
   createAppraisal, createReimbursement, downloadAppraisalPdf, downloadHrDocument, getAppraisals, getAppraisalTemplate, getHrDocuments,
   getReimbursements, updateAppraisal, updateAppraisalTemplate, updateHrDocument, updateReimbursement, uploadHrDocument
 } from "../services/api";
+import { PaginationControls, usePagination } from "./Pagination";
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[#0b5d43] focus:ring-2 focus:ring-emerald-100";
 const statusColor = {
@@ -218,7 +219,9 @@ function AppraisalQuestionnaire({ currentUser }) {
     setItems(submissions); setTemplate(activeTemplate); setAnswers((current) => current.length === activeTemplate.questions.length ? current : activeTemplate.questions.map(() => ""));
   };
   useEffect(() => { load().catch(() => setMessage("Could not load appraisal data.")); }, []);
-  const shown = items.filter((item) => `${item.employee?.name} ${item.employee?.email} ${item.reviewCycle}`.toLowerCase().includes(search.toLowerCase()));
+  const matchingSubmissions = items.filter((item) => `${item.employee?.name} ${item.employee?.email} ${item.reviewCycle}`.toLowerCase().includes(search.toLowerCase()));
+  const submissionPages = usePagination(matchingSubmissions, 8);
+  const shown = submissionPages.pageItems;
 
   async function submit(event) {
     event.preventDefault(); setBusy(true); setMessage("");
@@ -257,6 +260,7 @@ function AppraisalQuestionnaire({ currentUser }) {
     <Header eyebrow="Performance management" title="Employee Appraisals" description="Publish questions for employees, review immutable responses, add HR notes, and download a complete PDF." />
     <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"><button type="button" onClick={() => { setReviewTab("questions"); setSelected(null); }} className={`rounded-xl px-5 py-2.5 text-sm font-black ${reviewTab === "questions" ? "bg-[#064b36] text-white" : "text-slate-500"}`}>Question Setup</button><button type="button" onClick={() => setReviewTab("submissions")} className={`rounded-xl px-5 py-2.5 text-sm font-black ${reviewTab === "submissions" ? "bg-[#064b36] text-white" : "text-slate-500"}`}>Employee Submissions ({items.length})</button></div>
     {message ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
+    {reviewTab === "submissions" ? <PaginationControls page={submissionPages.page} totalPages={submissionPages.totalPages} totalItems={matchingSubmissions.length} pageSize={8} onPageChange={submissionPages.changePage} isPending={submissionPages.isPending} /> : null}
     {reviewTab === "questions" ? <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#0b5d43]">Live employee form</p><h2 className="mt-1 text-2xl font-black text-[#15372b]">Appraisal questions</h2><p className="mt-2 text-sm text-slate-500">Published changes appear for every employee who has not submitted yet. Existing answers stay unchanged.</p></div><label className="text-sm font-bold text-slate-700">Review cycle<input className={`${inputClass} mt-2 sm:w-48`} value={template.reviewCycle} onChange={(e) => setTemplate({ ...template, reviewCycle: e.target.value })} /></label></div><div className="mt-6 space-y-4">{template.questions.map((question, index) => <div key={index} className="flex items-start gap-3"><span className="mt-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-xs font-black text-[#064b36]">{index + 1}</span><textarea rows="3" className={`${inputClass} resize-y leading-6`} value={question} onChange={(e) => setTemplate((current) => ({ ...current, questions: current.questions.map((item, questionIndex) => questionIndex === index ? e.target.value : item) }))} /><button type="button" onClick={() => setTemplate((current) => ({ ...current, questions: current.questions.filter((_, questionIndex) => questionIndex !== index) }))} className="mt-2 rounded-lg p-2 text-rose-600 hover:bg-rose-50" aria-label={`Remove question ${index + 1}`}><XCircle size={19} /></button></div>)}</div><div className="mt-6 flex flex-wrap justify-between gap-3"><button type="button" onClick={() => setTemplate((current) => ({ ...current, questions: [...current.questions, ""] }))} className="inline-flex items-center gap-2 rounded-xl border border-[#064b36] bg-white px-4 py-2.5 text-sm font-bold text-[#064b36]"><Plus size={17} />Add question</button><button type="button" disabled={busy} onClick={saveTemplate} className="inline-flex items-center gap-2 rounded-xl bg-[#bfff2f] px-5 py-2.5 text-sm font-black text-[#064b36] disabled:opacity-60"><Save size={17} />{busy ? "Publishing..." : "Publish questions"}</button></div></section> : null}
     {reviewTab === "submissions" ? <><div className="grid gap-4 sm:grid-cols-3">{[["Total submissions", items.length], ["In review", items.filter((item) => item.status === "in_review").length], ["Completed", items.filter((item) => item.status === "completed").length]].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-xs font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-3xl font-black text-[#064b36]">{value}</p></div>)}</div>
     {message ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
@@ -271,7 +275,9 @@ function Reimbursements({ users }) {
   const [form, setForm] = useState({ employee: "", category: "travel", amount: "", expenseDate: "", description: "", reference: "" });
   const load = async () => setItems(await getReimbursements());
   useEffect(() => { load(); }, []);
-  const shown = useMemo(() => items.filter((x) => `${x.employee?.name} ${x.description} ${x.status}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
+  const matchingClaims = useMemo(() => items.filter((x) => `${x.employee?.name} ${x.description} ${x.status}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
+  const claimPages = usePagination(matchingClaims, 8);
+  const shown = claimPages.pageItems;
   async function submit(e) { e.preventDefault(); await createReimbursement(form); setForm({ ...form, employee: "", amount: "", expenseDate: "", description: "", reference: "" }); await load(); }
   const pending = items.filter((x) => ["submitted","under_review"].includes(x.status)).reduce((s,x) => s + x.amount, 0);
   return (
@@ -287,6 +293,7 @@ function Reimbursements({ users }) {
         <button className="rounded-xl bg-[#064b36] font-black text-white">Add claim</button>
       </form>
       <div className="relative max-w-md"><Search className="absolute left-3 top-3 text-slate-400" size={17}/><input className={`${inputClass} pl-9`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search claims"/></div>
+      <PaginationControls page={claimPages.page} totalPages={claimPages.totalPages} totalItems={matchingClaims.length} pageSize={8} onPageChange={claimPages.changePage} isPending={claimPages.isPending} />
       <div className="grid gap-4 lg:grid-cols-2">{shown.map((item) => <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex justify-between gap-3"><div><p className="font-black text-[#15372b]">{item.employee?.name}</p><p className="mt-1 text-sm capitalize text-slate-500">{item.category} · {new Date(item.expenseDate).toLocaleDateString("en-IN")}</p></div><p className="text-xl font-black text-[#064b36]">₹{item.amount.toLocaleString("en-IN")}</p></div><p className="my-4 text-sm text-slate-600">{item.description}</p><div className="flex items-center justify-between"><Badge value={item.status}/><div className="flex gap-2">{!["approved","paid"].includes(item.status) ? <button onClick={async()=>{await updateReimbursement(item._id,{status:"approved"});await load();}} className="rounded-lg bg-emerald-100 p-2 text-emerald-700" title="Approve"><CheckCircle2 size={18}/></button>:null}{!["rejected","paid"].includes(item.status) ? <button onClick={async()=>{await updateReimbursement(item._id,{status:"rejected"});await load();}} className="rounded-lg bg-rose-100 p-2 text-rose-700" title="Reject"><XCircle size={18}/></button>:null}{item.status === "approved" ? <button onClick={async()=>{await updateReimbursement(item._id,{status:"paid"});await load();}} className="rounded-lg bg-violet-100 px-3 text-xs font-black text-violet-700">Mark paid</button>:null}</div></div></article>)}</div>
     </>
   );

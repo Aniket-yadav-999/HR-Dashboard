@@ -1,5 +1,6 @@
 import { Activity, BriefcaseBusiness, DoorOpen, Pencil, Trash2, UserCheck, UserRoundPlus, Users } from "lucide-react";
 import { formatDate, getEmployeeStats } from "../utils/employeeStats";
+import { PaginationControls, usePagination } from "./Pagination";
 
 function StatCard({ title, value, icon: Icon, helper, color }) {
   return (
@@ -34,6 +35,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
     : currentUser?.teamName && currentUser.teamName !== "General"
       ? `Members of ${currentUser.teamName}.`
       : "People who work directly with your team.";
+  const directory = usePagination(users, 8);
 
   const cards = [
     { title: canManageUsers ? "Total Employees" : "Team Members", value: stats.total, icon: Users, helper: canManageUsers ? "Complete workforce strength" : "People in your team", color: "#064b36" },
@@ -52,7 +54,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+        <div ref={directory.anchorRef} className="scroll-mt-24 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
             <div>
               <h3 className="text-xl font-black text-[#15372b]">{directoryTitle}</h3>
@@ -63,7 +65,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="data-scroll">
             <table className="w-full min-w-[680px] border-collapse text-left text-sm">
               <thead>
                 <tr className="bg-[#064b36] text-xs uppercase tracking-widest text-white">
@@ -76,7 +78,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {users.map((user) => (
+                {directory.pageItems.map((user) => (
                   <tr key={user.id} className="transition hover:bg-[#eff6df]">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
@@ -142,6 +144,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
               </tbody>
             </table>
           </div>
+          <PaginationControls page={directory.page} totalPages={directory.totalPages} totalItems={users.length} pageSize={8} onPageChange={directory.changePage} isPending={directory.isPending} />
         </div>
 
         <div className="space-y-6">

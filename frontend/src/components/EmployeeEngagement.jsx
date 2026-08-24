@@ -24,6 +24,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { createEngagementItem, deleteEngagementItem, getEngagementItems, getEngagementPeople, updateEngagementItem } from "../services/api";
 import { formatDate } from "../utils/employeeStats";
+import { PaginationControls, usePagination } from "./Pagination";
 
 const categories = [
   { value: "birthday", label: "Birthday", icon: CakeSlice },
@@ -316,6 +317,7 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
   }, [items, people, users]);
 
   const filteredItems = useMemo(() => items.filter((item) => item.category === activeCategory), [items, activeCategory]);
+  const engagementPages = usePagination(filteredItems, 8);
 
   const boardCounts = {
     birthday: currentMonth.today.length + currentMonth.upcomingBirthdays.length,
@@ -758,11 +760,12 @@ function EmployeeEngagement({ currentUser, users = [], onChanged }) {
           {loading ? (
             <EmptyState title="Loading engagement board..." />
           ) : filteredItems.length ? (
-            filteredItems.map((item) => <PostCard key={item.id} item={item} canManage={canManage && item.category !== "feedback"} onEdit={startEdit} onDelete={removeItem} />)
+            engagementPages.pageItems.map((item) => <PostCard key={item.id} item={item} canManage={canManage && item.category !== "feedback"} onEdit={startEdit} onDelete={removeItem} />)
           ) : (
             <EmptyState title="No items in this section yet." />
           )}
         </div>
+        <div className="mt-5 overflow-hidden rounded-xl"><PaginationControls page={engagementPages.page} totalPages={engagementPages.totalPages} totalItems={filteredItems.length} pageSize={8} onPageChange={engagementPages.changePage} isPending={engagementPages.isPending} /></div>
       </div>
     </section>
   );
