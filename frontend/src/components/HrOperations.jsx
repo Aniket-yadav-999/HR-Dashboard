@@ -1,7 +1,7 @@
 import { CheckCircle2, Download, FileText, FileUp, IndianRupee, Pencil, Plus, Save, Search, Star, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  createAppraisal, createReimbursement, downloadHrDocument, getAppraisals, getHrDocuments,
+  createAppraisal, createReimbursement, downloadAppraisalPdf, downloadHrDocument, getAppraisals, getHrDocuments,
   getReimbursements, updateAppraisal, updateHrDocument, updateReimbursement, uploadHrDocument
 } from "../services/api";
 
@@ -98,7 +98,7 @@ function PolicyDocuments({ currentUser }) {
   useEffect(() => { load().catch(() => setMessage("Could not load policies.")); }, []);
   const tab = policyTabs.find(([id]) => id === activeTab);
   const policy = items.find((item) => (item.category || "paid-leave") === activeTab);
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = ["admin", "hr"].includes(currentUser?.role);
 
   function openEditor() {
     setForm({ title: policy?.title || tab[1], description: policy?.description || tab[2], policyContent: policy?.policyContent || (activeTab === "paid-leave" ? paidLeaveCopy : "") });
@@ -139,7 +139,7 @@ function PolicyDocuments({ currentUser }) {
   </section>;
 }
 
-function Appraisals({ users }) {
+function LegacyAppraisals({ users }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ employee: "", reviewCycle: "FY 2026-27", reviewer: "", rating: 3, status: "scheduled", dueDate: "", goals: "" });
   const load = async () => setItems(await getAppraisals());
@@ -164,6 +164,69 @@ function Appraisals({ users }) {
       <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white"><table className="w-full text-left text-sm"><thead className="bg-[#064b36] text-white"><tr>{["Employee","Cycle","Reviewer","Rating","Due date","Status","Action"].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>{items.map((item) => <tr key={item._id} className="border-b border-slate-100"><td className="px-4 py-4 font-black">{item.employee?.name}</td><td className="px-4">{item.reviewCycle}</td><td className="px-4">{item.reviewer || "—"}</td><td className="px-4"><span className="inline-flex items-center gap-1 font-black"><Star size={14} fill="#f59e0b" className="text-amber-500"/>{item.rating}</span></td><td className="px-4">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-IN") : "—"}</td><td className="px-4"><Badge value={item.status}/></td><td className="px-4"><select className="rounded-lg border p-2 text-xs" value={item.status} onChange={async (e) => { await updateAppraisal(item._id, { status: e.target.value }); await load(); }}>{["draft","scheduled","in_review","completed"].map((s) => <option key={s}>{s}</option>)}</select></td></tr>)}</tbody></table></div>
     </>
   );
+}
+
+const appraisalQuestions = [
+  "How would you reflect on your performance during the period 2025–2026 (till date)?",
+  "What are your career aspirations within A2G?",
+  "What are your salary expectations for the next 1–2 years?",
+  "What is your plan of action to achieve your aspirations and salary expectations in the next 1–2 years?",
+  "Which key skills and capabilities do you want to develop to achieve your plan of action and goals?",
+  "How do you envision your long-term growth with A2G?",
+  "How would you assess your professional journey so far?",
+  "What organizational support would help enhance your performance and professional growth?"
+];
+
+const ratingOptions = [
+  [1, "Improvement Needed"], [2, "Partially Meets Expectations"], [3, "Meets Expectations"],
+  [4, "Often Exceeds Expectations"], [5, "Significantly Exceeds Expectations"]
+];
+
+function AppraisalQuestionnaire({ currentUser }) {
+  const reviewer = ["admin", "hr"].includes(currentUser?.role);
+  const [items, setItems] = useState([]);
+  const [answers, setAnswers] = useState(appraisalQuestions.map(() => ""));
+  const [rating, setRating] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const load = async () => setItems(await getAppraisals());
+  useEffect(() => { load().catch(() => setMessage("Could not load appraisal submissions.")); }, []);
+  const shown = items.filter((item) => `${item.employee?.name} ${item.employee?.email} ${item.reviewCycle}`.toLowerCase().includes(search.toLowerCase()));
+
+  async function submit(event) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      await createAppraisal({ reviewCycle: "2025–2026", answers: appraisalQuestions.map((question, index) => ({ question, answer: answers[index] })), rating: Number(rating) });
+      setMessage("Your appraisal has been submitted directly to HR."); setAnswers(appraisalQuestions.map(() => "")); setRating(""); await load();
+    } catch (error) { setMessage(error.response?.data?.message || "Could not submit appraisal."); } finally { setBusy(false); }
+  }
+
+  async function saveReview() {
+    setBusy(true); setMessage("");
+    try {
+      const updated = await updateAppraisal(selected._id, { answers: selected.answers, rating: selected.rating, hrNotes: selected.hrNotes, status: selected.status });
+      setSelected(updated); setMessage("Appraisal changes saved."); await load();
+    } catch (error) { setMessage(error.response?.data?.message || "Could not save changes."); } finally { setBusy(false); }
+  }
+
+  if (!reviewer) return <div className="space-y-6">
+    <Header eyebrow="Performance appraisal · 2025–2026" title="Your Self-Appraisal" description="Answer every question thoughtfully. Once submitted, your response goes directly to HR for review." />
+    {items.length ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><p className="font-black text-[#064b36]">Appraisal submitted</p><p className="mt-1 text-sm text-emerald-800">HR received your response on {new Date(items[0].submittedAt || items[0].createdAt).toLocaleDateString("en-IN")}. Status: <span className="font-bold capitalize">{items[0].status?.replaceAll("_", " ")}</span>.</p></div> : <form onSubmit={submit} className="space-y-5">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-7 flex items-start gap-4"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#bfff2f] font-black text-[#064b36]">Q&amp;A</span><div><h2 className="text-xl font-black text-[#15372b]">Employee reflection form</h2><p className="mt-1 text-sm text-slate-500">All eight written answers and the self-rating are required.</p></div></div><div className="space-y-6">{appraisalQuestions.map((question, index) => <label key={question} className="block"><span className="mb-2 block text-sm font-bold leading-6 text-[#15372b]">{index + 1}. {question}</span><textarea required rows="5" value={answers[index]} onChange={(e) => setAnswers((current) => current.map((value, answerIndex) => answerIndex === index ? e.target.value : value))} className={`${inputClass} resize-y leading-6`} placeholder="Write your answer in detail..." /></label>)}</div></div>
+      <fieldset className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><legend className="px-2 text-sm font-black text-[#15372b]">9. Rate your performance</legend><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{ratingOptions.map(([value, label]) => <label key={value} className={`cursor-pointer rounded-2xl border p-4 transition ${Number(rating) === value ? "border-[#064b36] bg-emerald-50 ring-2 ring-emerald-100" : "border-slate-200 hover:border-emerald-300"}`}><input required type="radio" name="rating" value={value} checked={Number(rating) === value} onChange={(e) => setRating(e.target.value)} className="accent-[#064b36]" /><span className="ml-2 font-black text-[#064b36]">{value}/5</span><p className="mt-2 text-xs leading-5 text-slate-600">{label}</p></label>)}</div></fieldset>
+      {message ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}<button disabled={busy} className="w-full rounded-2xl bg-[#064b36] px-5 py-4 font-black text-white shadow-lg disabled:opacity-60">{busy ? "Submitting..." : "Submit appraisal to HR"}</button>
+    </form>}
+  </div>;
+
+  return <div className="space-y-6">
+    <Header eyebrow="Performance management" title="Employee Appraisals" description="Review every employee submission, edit responses or HR notes, and download a complete PDF." />
+    <div className="grid gap-4 sm:grid-cols-3">{[["Total submissions", items.length], ["In review", items.filter((item) => item.status === "in_review").length], ["Completed", items.filter((item) => item.status === "completed").length]].map(([label, value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-xs font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-3xl font-black text-[#064b36]">{value}</p></div>)}</div>
+    {message ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
+    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-[#0b5d43]">Submissions</p><h2 className="mt-1 text-xl font-black text-[#15372b]">Employee responses</h2></div><div className="relative"><Search className="absolute left-3 top-3 text-slate-400" size={17} /><input className={`${inputClass} pl-9 sm:w-72`} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." /></div></div><div className="divide-y divide-slate-100">{shown.map((item) => <article key={item._id} className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-black text-[#15372b]">{item.employee?.name}</h3><Badge value={item.status} /></div><p className="mt-1 text-sm text-slate-500">{item.employee?.designation || "Employee"} · {item.employee?.department || "Department not set"}</p><p className="mt-2 text-xs font-bold text-slate-400">Submitted {new Date(item.submittedAt || item.createdAt).toLocaleDateString("en-IN")} · Rating {item.rating}/5</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => setSelected(structuredClone(item))} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700"><Pencil size={16} />Review &amp; edit</button><button type="button" onClick={() => downloadAppraisalPdf(item._id, `${item.employee?.name || "employee"}-appraisal.pdf`)} className="inline-flex items-center gap-2 rounded-xl bg-[#064b36] px-4 py-2.5 text-sm font-bold text-white"><Download size={16} />Download PDF</button></div></article>)}{!shown.length ? <p className="p-10 text-center text-sm font-bold text-slate-500">No appraisal submissions found.</p> : null}</div></div>
+    {selected ? <section className="rounded-3xl border border-emerald-200 bg-emerald-50/40 p-5 sm:p-7"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-wider text-[#0b5d43]">Reviewing submission</p><h2 className="mt-1 text-2xl font-black text-[#15372b]">{selected.employee?.name}</h2></div><button type="button" onClick={() => setSelected(null)} className="rounded-xl border bg-white px-3 py-2 text-sm font-bold text-slate-600">Close</button></div><div className="mt-6 space-y-5">{selected.answers?.map((entry, index) => <label key={`${entry.question}-${index}`} className="block"><span className="mb-2 block text-sm font-bold leading-6 text-[#15372b]">{index + 1}. {entry.question}</span><textarea rows="4" className={`${inputClass} resize-y leading-6`} value={entry.answer} onChange={(e) => setSelected((current) => ({ ...current, answers: current.answers.map((answer, answerIndex) => answerIndex === index ? { ...answer, answer: e.target.value } : answer) }))} /></label>)}</div><div className="mt-5 grid gap-4 md:grid-cols-2"><label className="text-sm font-bold text-[#15372b]">Self-rating<select className={`${inputClass} mt-2`} value={selected.rating} onChange={(e) => setSelected({ ...selected, rating: Number(e.target.value) })}>{ratingOptions.map(([value, label]) => <option key={value} value={value}>{value}/5 — {label}</option>)}</select></label><label className="text-sm font-bold text-[#15372b]">Review status<select className={`${inputClass} mt-2`} value={selected.status} onChange={(e) => setSelected({ ...selected, status: e.target.value })}><option value="in_review">In review</option><option value="completed">Completed</option></select></label></div><label className="mt-5 block text-sm font-bold text-[#15372b]">HR notes<textarea rows="4" className={`${inputClass} mt-2 resize-y`} value={selected.hrNotes || ""} onChange={(e) => setSelected({ ...selected, hrNotes: e.target.value })} placeholder="Add review notes for the appraisal PDF..." /></label><div className="mt-5 flex flex-wrap justify-end gap-3"><button type="button" onClick={() => downloadAppraisalPdf(selected._id, `${selected.employee?.name || "employee"}-appraisal.pdf`)} className="inline-flex items-center gap-2 rounded-xl border border-[#064b36] bg-white px-4 py-2.5 text-sm font-bold text-[#064b36]"><Download size={16} />Download PDF</button><button type="button" disabled={busy} onClick={saveReview} className="inline-flex items-center gap-2 rounded-xl bg-[#bfff2f] px-5 py-2.5 text-sm font-black text-[#064b36] disabled:opacity-60"><Save size={17} />{busy ? "Saving..." : "Save changes"}</button></div></section> : null}
+  </div>;
 }
 
 function Reimbursements({ users }) {
@@ -194,5 +257,5 @@ function Reimbursements({ users }) {
 }
 
 export default function HrOperations({ activeSection, currentUser, users }) {
-  return <div className="space-y-6">{activeSection === "documents" ? <PolicyDocuments currentUser={currentUser} /> : activeSection === "appraisals" ? <Appraisals users={users} /> : <Reimbursements users={users} />}</div>;
+  return <div className="space-y-6">{activeSection === "documents" ? <PolicyDocuments currentUser={currentUser} /> : activeSection === "appraisals" ? <AppraisalQuestionnaire currentUser={currentUser} /> : <Reimbursements users={users} />}</div>;
 }
