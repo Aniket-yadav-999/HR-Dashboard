@@ -8,7 +8,7 @@ const items = [
   { label: "AAGarg Organization", value: "organization", icon: Network },
   { label: "Asset Management", value: "assets", icon: Laptop, roles: ["admin", "hr"] },
   { label: "Helpdesk & Requests", value: "helpdesk", icon: Headphones },
-  { label: "Document & Policy", value: "documents", icon: FileText, roles: ["admin", "hr"] },
+  { label: "Document & Policy", value: "documents", icon: FileText },
   { label: "Appraisal", value: "appraisals", icon: Star, roles: ["admin", "hr"] },
   { label: "Reimbursement", value: "reimbursements", icon: HandCoins, roles: ["admin", "hr"] },
   { label: "Notifications", value: "notifications", icon: Bell }
