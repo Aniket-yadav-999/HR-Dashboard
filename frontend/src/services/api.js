@@ -216,6 +216,16 @@ export async function updateAppraisal(id, payload) {
   return response.data;
 }
 
+export async function downloadAppraisalPdf(id, fileName) {
+  const response = await api.get(`/hr-operations/appraisals/${id}/pdf`, { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function getReimbursements() {
   const response = await api.get("/hr-operations/reimbursements");
   return response.data;

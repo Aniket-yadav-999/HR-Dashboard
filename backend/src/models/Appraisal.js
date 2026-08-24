@@ -10,6 +10,12 @@ const appraisalSchema = new mongoose.Schema(
     dueDate: Date,
     goals: { type: String, default: "", trim: true },
     feedback: { type: String, default: "", trim: true },
+    answers: [{
+      question: { type: String, required: true, trim: true },
+      answer: { type: String, required: true, trim: true }
+    }],
+    hrNotes: { type: String, default: "", trim: true },
+    submittedAt: Date,
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }
   },
   { timestamps: true }
