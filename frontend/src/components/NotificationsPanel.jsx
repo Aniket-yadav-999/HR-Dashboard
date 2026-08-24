@@ -1,5 +1,6 @@
 import { Bell, CalendarDays, CakeSlice, CheckCircle2, Headphones, HeartHandshake, Inbox, Laptop, PartyPopper, Sparkles, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
+import { PaginationControls, usePagination } from "./Pagination";
 
 const sectionStyles = {
   birthday: { label: "Birthday", color: "#064b36", icon: CakeSlice },
@@ -55,6 +56,7 @@ function NotificationsPanel({ notifications }) {
   const activeSection = getSection(activeType);
   const ActiveIcon = activeSection.icon;
   const activeNotifications = grouped[activeType] || [];
+  const notificationPages = usePagination(activeNotifications, 10);
 
   return (
     <section className="space-y-6">
@@ -85,7 +87,7 @@ function NotificationsPanel({ notifications }) {
             return (
               <button
                 key={type}
-                onClick={() => setActiveType(type)}
+                onClick={() => { setActiveType(type); notificationPages.resetPage(); }}
                 className={`group flex min-h-20 items-center gap-3 rounded-2xl border p-3 text-left transition hover:-translate-y-0.5 ${
                   active ? "border-transparent text-white shadow-xl" : "border-slate-200 bg-white text-[#15372b] shadow-sm hover:bg-[#eff6df]"
                 }`}
@@ -109,7 +111,7 @@ function NotificationsPanel({ notifications }) {
       </div>
 
       {notifications.length ? (
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+        <div ref={notificationPages.anchorRef} className="scroll-mt-24 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg" style={{ backgroundColor: activeSection.color }}>
@@ -126,7 +128,7 @@ function NotificationsPanel({ notifications }) {
           </div>
 
           {activeNotifications.length ? (
-            <div className="overflow-x-auto">
+            <div className="data-scroll">
               <table className="min-w-full text-left text-sm">
                 <thead style={{ backgroundColor: activeSection.color }}>
                   <tr className="text-xs uppercase tracking-widest text-white">
@@ -138,7 +140,7 @@ function NotificationsPanel({ notifications }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {activeNotifications.map((notification) => (
+                  {notificationPages.pageItems.map((notification) => (
                     <tr key={notification.id} className="transition hover:bg-[#eff6df]">
                       <td className="px-5 py-4">
                         <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
@@ -162,6 +164,7 @@ function NotificationsPanel({ notifications }) {
               <p className="mt-2 text-sm text-slate-500">Updates from this section will appear here automatically.</p>
             </div>
           )}
+          <PaginationControls page={notificationPages.page} totalPages={notificationPages.totalPages} totalItems={activeNotifications.length} pageSize={10} onPageChange={notificationPages.changePage} isPending={notificationPages.isPending} />
         </div>
       ) : (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center shadow-xl shadow-slate-200/70">

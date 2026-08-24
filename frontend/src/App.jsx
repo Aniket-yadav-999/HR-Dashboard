@@ -159,7 +159,7 @@ function App() {
           />
         ) : null}
         <section
-          className={`min-w-0 flex-1 px-4 py-6 transition-all duration-300 sm:px-6 lg:px-8 ${
+          className={`min-w-0 flex-1 px-4 pb-28 pt-6 transition-all duration-300 sm:px-6 lg:px-8 lg:pb-6 ${
             user ? (sidebarCollapsed ? "lg:ml-20" : "lg:ml-72") : ""
           }`}
         >

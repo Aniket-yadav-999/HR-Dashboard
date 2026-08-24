@@ -1,6 +1,7 @@
 import { CheckCircle2, FileSpreadsheet, Laptop, Loader2, PackageCheck, Plus, RefreshCw, Upload, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bulkReplaceAssets, createAsset, getAssets, updateAsset } from "../services/api";
+import { PaginationControls, usePagination } from "./Pagination";
 
 const categories = ["laptop", "desktop", "accessory", "mouse", "other"];
 const statuses = ["available", "issued", "maintenance", "returned", "retired"];
@@ -73,6 +74,7 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
   }), [assets]);
 
   const visibleAssets = selectedCategory === "all" ? assets : assets.filter((asset) => asset.category === selectedCategory);
+  const assetPages = usePagination(visibleAssets, 10);
 
   async function loadAssets() {
     setLoading(true);
@@ -289,7 +291,7 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div ref={assetPages.anchorRef} className="data-scroll scroll-mt-24">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-[#064b36] text-xs uppercase tracking-widest text-white">
                 <tr>
@@ -309,7 +311,7 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {visibleAssets.map((asset) => (
+                {assetPages.pageItems.map((asset) => (
                   <tr key={asset.id} className="transition hover:bg-[#eff6df]">
                     <td className="whitespace-nowrap px-4 py-4 font-black text-[#15372b]">{asset.assetId}</td>
                     <td className="whitespace-nowrap px-4 py-4 font-black text-[#15372b]">{asset.name}</td>
@@ -346,6 +348,7 @@ function AssetManagement({ currentUser, users = [], onChanged }) {
               </tbody>
             </table>
           </div>
+          <PaginationControls page={assetPages.page} totalPages={assetPages.totalPages} totalItems={visibleAssets.length} pageSize={10} onPageChange={assetPages.changePage} isPending={assetPages.isPending} />
         </div>
       </div>
     </section>

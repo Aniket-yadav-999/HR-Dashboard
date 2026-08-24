@@ -24,6 +24,41 @@ body {
   letter-spacing: 0;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #9fb9ad #eef3f0;
+  scroll-behavior: smooth;
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: #eef3f0; border-radius: 999px; }
+*::-webkit-scrollbar-thumb { background: #9fb9ad; border-radius: 999px; border: 2px solid #eef3f0; }
+*::-webkit-scrollbar-thumb:hover { background: #0b5d43; }
+
+@layer components {
+  .pagination-button {
+    @apply inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-[#064b36] disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .pagination-button-active {
+    @apply border-[#064b36] bg-[#064b36] text-white hover:bg-[#064b36] hover:text-white;
+  }
+
+  .data-scroll {
+    @apply overflow-x-auto overscroll-contain scroll-smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
+
 ::selection {
   background: rgba(191, 255, 47, 0.42);
 }

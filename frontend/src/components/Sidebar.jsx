@@ -18,6 +18,7 @@ function Sidebar({ collapsed, activeView, onViewChange, onToggle, currentUser })
   const visibleItems = items.filter((item) => !item.roles || item.roles.includes(currentUser?.role));
 
   return (
+    <>
     <aside
       className={`fixed bottom-0 left-0 top-0 z-40 hidden border-r border-emerald-950 bg-[#064b36] px-3 py-5 shadow-2xl shadow-emerald-950/25 transition-all duration-300 lg:block ${
         collapsed ? "w-20" : "w-72"
@@ -66,6 +67,14 @@ function Sidebar({ collapsed, activeView, onViewChange, onToggle, currentUser })
         })}
       </nav>
     </aside>
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex gap-1 overflow-x-auto border-t border-emerald-900/20 bg-[#064b36]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_30px_rgba(4,59,43,0.2)] backdrop-blur-xl lg:hidden" aria-label="Mobile workspace navigation">
+      {visibleItems.map((item) => {
+        const Icon = item.icon;
+        const active = activeView === item.value;
+        return <button key={item.value} onClick={() => onViewChange(item.value)} type="button" className={`flex min-w-[4.75rem] shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-bold transition ${active ? "bg-[#bfff2f] text-[#064b36]" : "text-emerald-50 hover:bg-white/10"}`} aria-current={active ? "page" : undefined}><Icon size={18} /><span className="max-w-[4.5rem] truncate">{item.label}</span></button>;
+      })}
+    </nav>
+    </>
   );
 }
 
