@@ -3,6 +3,7 @@ import multer from "multer";
 import PDFDocument from "pdfkit";
 import { requireAuth, requireHrOrAdmin } from "../middleware/auth.js";
 import { Appraisal } from "../models/Appraisal.js";
+import { AppraisalTemplate } from "../models/AppraisalTemplate.js";
 import { HrDocument } from "../models/HrDocument.js";
 import { Reimbursement } from "../models/Reimbursement.js";
 
@@ -12,6 +13,16 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 const protect = [requireAuth, requireHrOrAdmin];
+const defaultAppraisalQuestions = [
+  "How would you reflect on your performance during the period 2025–2026 (till date)?",
+  "What are your career aspirations within A2G?",
+  "What are your salary expectations for the next 1–2 years?",
+  "What is your plan of action to achieve your aspirations and salary expectations in the next 1–2 years?",
+  "Which key skills and capabilities do you want to develop to achieve your plan of action and goals?",
+  "How do you envision your long-term growth with A2G?",
+  "How would you assess your professional journey so far?",
+  "What organizational support would help enhance your performance and professional growth?"
+];
 
 router.get("/documents", requireAuth, async (_req, res, next) => {
   try {
@@ -77,11 +88,33 @@ router.get("/appraisals", requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+router.get("/appraisal-template", requireAuth, async (req, res, next) => {
+  try {
+    let template = await AppraisalTemplate.findOne({ active: true }).sort({ updatedAt: -1 });
+    if (!template) template = await AppraisalTemplate.create({ reviewCycle: "2025–2026", questions: defaultAppraisalQuestions, updatedBy: req.user._id });
+    res.json(template);
+  } catch (error) { next(error); }
+});
+
+router.put("/appraisal-template", ...protect, async (req, res, next) => {
+  try {
+    const questions = Array.isArray(req.body.questions) ? req.body.questions.map((item) => item.trim()).filter(Boolean) : [];
+    if (!req.body.reviewCycle?.trim() || !questions.length) return res.status(400).json({ message: "Review cycle and at least one question are required" });
+    const template = await AppraisalTemplate.findOneAndUpdate(
+      { reviewCycle: req.body.reviewCycle.trim() },
+      { questions, active: true, updatedBy: req.user._id },
+      { new: true, upsert: true, runValidators: true }
+    );
+    res.json(template);
+  } catch (error) { next(error); }
+});
+
 router.post("/appraisals", requireAuth, async (req, res, next) => {
   try {
     const answers = Array.isArray(req.body.answers) ? req.body.answers : [];
-    if (!req.body.reviewCycle || answers.length !== 8 || answers.some((item) => !item.question?.trim() || !item.answer?.trim())) {
-      return res.status(400).json({ message: "Please answer all eight appraisal questions" });
+    const template = await AppraisalTemplate.findOne({ reviewCycle: req.body.reviewCycle, active: true });
+    if (!template || answers.length !== template.questions.length || answers.some((item, index) => item.question !== template.questions[index] || !item.answer?.trim())) {
+      return res.status(400).json({ message: "The appraisal questions changed. Refresh and answer every current question." });
     }
     const existing = await Appraisal.findOne({ employee: req.user._id, reviewCycle: req.body.reviewCycle });
     if (existing) return res.status(409).json({ message: "You have already submitted this appraisal" });
@@ -100,7 +133,10 @@ router.post("/appraisals", requireAuth, async (req, res, next) => {
 
 router.patch("/appraisals/:id", ...protect, async (req, res, next) => {
   try {
-    const item = await Appraisal.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+    const update = {};
+    if (req.body.hrNotes !== undefined) update.hrNotes = req.body.hrNotes;
+    if (["in_review", "completed"].includes(req.body.status)) update.status = req.body.status;
+    const item = await Appraisal.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
       .populate("employee", "name email department designation");
     if (!item) return res.status(404).json({ message: "Appraisal not found" });
     res.json(item);
@@ -129,7 +165,7 @@ router.get("/appraisals/:id/pdf", ...protect, async (req, res, next) => {
       pdf.moveDown(0.3).fillColor("#374151").fontSize(10).font("Helvetica").text(entry.answer, { lineGap: 3 });
       pdf.moveDown(0.9);
     });
-    pdf.fillColor("#15372b").fontSize(11).font("Helvetica-Bold").text("9. Self-rating");
+    pdf.fillColor("#15372b").fontSize(11).font("Helvetica-Bold").text(`${item.answers.length + 1}. Self-rating`);
     pdf.moveDown(0.3).fillColor("#374151").fontSize(10).font("Helvetica").text(`${item.rating} / 5`);
     if (item.hrNotes) {
       pdf.moveDown(1).fillColor("#15372b").fontSize(11).font("Helvetica-Bold").text("HR Notes");
