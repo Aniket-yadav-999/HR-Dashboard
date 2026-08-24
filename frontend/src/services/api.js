@@ -206,6 +206,16 @@ export async function getAppraisals() {
   return response.data;
 }
 
+export async function getAppraisalTemplate() {
+  const response = await api.get("/hr-operations/appraisal-template");
+  return response.data;
+}
+
+export async function updateAppraisalTemplate(payload) {
+  const response = await api.put("/hr-operations/appraisal-template", payload);
+  return response.data;
+}
+
 export async function createAppraisal(payload) {
   const response = await api.post("/hr-operations/appraisals", payload);
   return response.data;
