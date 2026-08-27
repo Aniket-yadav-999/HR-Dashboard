@@ -15,7 +15,7 @@ function EmployeeIdCard({ user, onUserUpdated }) {
   const [flipped, setFlipped] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const employeeCode = `A2G-${String(user.id || "000000").slice(-6).toUpperCase()}`;
+  const employeeCode = user.employeeCode || `A2G-${String(user.id || "000000").slice(-6).toUpperCase()}`;
 
   useEffect(() => {
     let active = true;

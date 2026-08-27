@@ -22,6 +22,7 @@ function publicUser(user) {
     id: user._id,
     name: user.name,
     email: user.email,
+    employeeCode: user.employeeCode,
     role: user.role,
     status: user.status,
     department: user.department,

@@ -35,6 +35,7 @@ function ProfileCard({ user, onClose, onOpenProfile }) {
               {user.name}
             </button>
             <p className="text-sm text-slate-500">{user.designation}</p>
+            <p className="mt-0.5 font-mono text-xs font-bold text-[#0b5d43]">{user.employeeCode || "Code not assigned"}</p>
           </div>
         </div>
         <button

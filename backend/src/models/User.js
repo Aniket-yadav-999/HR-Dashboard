@@ -14,6 +14,13 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true
     },
+    employeeCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+      uppercase: true,
+      trim: true
+    },
     passwordHash: {
       type: String,
       required: true

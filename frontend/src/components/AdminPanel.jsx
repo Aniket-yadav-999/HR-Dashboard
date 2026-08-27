@@ -4,6 +4,7 @@ import { createUser, updateUser } from "../services/api";
 
 const initialForm = {
   name: "",
+  employeeCode: "",
   email: "",
   password: "",
   role: "employee",
@@ -24,6 +25,7 @@ function toForm(user) {
 
   return {
     name: user.name || "",
+    employeeCode: user.employeeCode || "",
     email: user.email || "",
     password: "",
     role: user.role || "employee",
@@ -90,7 +92,7 @@ function AdminPanel({ currentUser, open, editingUser, onClose, onUserCreated, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#eff6df]0/20 px-4 py-6">
-      <section className="w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-emerald-200/40">
+      <section className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-emerald-200/40">
         <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
           <div className="relative hidden min-h-full overflow-hidden bg-[#064b36] p-7 text-white lg:block">
             <div className="absolute -left-16 top-16 h-44 w-44 rounded-full bg-white/20 blur-2xl" />
@@ -129,6 +131,7 @@ function AdminPanel({ currentUser, open, editingUser, onClose, onUserCreated, on
             <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
               {[
                 ["name", "Full name", "text", UserRound],
+                ["employeeCode", "Employee Code", "text", ShieldCheck],
                 ["email", "Email", "email", Mail],
                 ["password", "Password", "password", ShieldCheck],
                 ["department", "Department", "text", BriefcaseBusiness],
@@ -146,8 +149,8 @@ function AdminPanel({ currentUser, open, editingUser, onClose, onUserCreated, on
                       placeholder={placeholder}
                       type={type}
                       value={form[field]}
-                      onChange={(event) => updateField(field, event.target.value)}
-                      required={["name", "email"].includes(field) || (field === "password" && !editingUser)}
+                      onChange={(event) => updateField(field, field === "employeeCode" ? event.target.value.toUpperCase() : event.target.value)}
+                      required={["name", "email", "employeeCode"].includes(field) || (field === "password" && !editingUser)}
                     />
                   </div>
                 </label>
