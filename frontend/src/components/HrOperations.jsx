@@ -287,6 +287,7 @@ function Reimbursements({ users, currentUser }) {
   async function submit(event) {
     event.preventDefault();
     if (!proof) return setMessage("Please attach a PDF, JPEG, JPG or PNG proof.");
+    if (proof.size > 10 * 1024 * 1024) return setMessage("Proof file must be 10 MB or smaller.");
     setBusy(true); setMessage("");
     const payload = new FormData();
     Object.entries(form).forEach(([key, value]) => payload.append(key, value));
@@ -295,7 +296,12 @@ function Reimbursements({ users, currentUser }) {
       await createReimbursement(payload);
       setForm({ category: "", amount: "", expenseDate: "", description: "" }); setProof(null);
       event.currentTarget.reset(); setMessage("Your reimbursement claim has been submitted to HR."); await load();
-    } catch (error) { setMessage(error.response?.data?.message || "Could not submit reimbursement claim."); } finally { setBusy(false); }
+    } catch (error) {
+      const networkMessage = error.request && !error.response
+        ? "The reimbursement server could not be reached. Please check your connection and try again."
+        : "Could not submit reimbursement claim.";
+      setMessage(error.response?.data?.message || networkMessage);
+    } finally { setBusy(false); }
   }
   async function changeStatus(id, status) {
     try { await updateReimbursement(id, { status }); setMessage(`Claim marked as ${status}.`); await load(); }
