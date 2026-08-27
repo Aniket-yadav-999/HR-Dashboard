@@ -1,88 +1,111 @@
-import { BadgeCheck, BriefcaseBusiness, Camera, FlipHorizontal2, Loader2, Mail, ShieldCheck, UserRound, UsersRound } from "lucide-react";
-import { useEffect, useState } from "react";
-import { getProfilePhoto, uploadProfilePhoto } from "../services/api";
+import { BadgeCheck, BriefcaseBusiness, Camera, CreditCard, FlipHorizontal2, IdCard, Loader2, Mail, MapPin, Pencil, Phone, Save, ShieldCheck, UserRound, UsersRound, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { getProfilePhoto, updateOwnProfile, uploadProfilePhoto } from "../services/api";
 
 const logoUrl = "https://aagarg.in/wp-content/uploads/2025/05/A2G-New-Logo-Black.avif";
-const fallback = (value) => value || "Not added";
+const empty = "Not set";
+const show = (value) => value || empty;
+const titleCase = (value) => value ? value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) : empty;
 const initials = (name = "") => name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+const inputClass = "mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-[#15372b] outline-none transition focus:border-[#0b5d43] focus:bg-white focus:ring-4 focus:ring-emerald-100";
 
-function DetailRow({ icon: Icon, label, value }) {
-  return <div className="flex items-center gap-3 rounded-2xl border border-emerald-900/10 bg-white/80 p-3.5 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf7df] text-[#064b36]"><Icon size={17} /></span><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">{label}</p><p className="mt-1 truncate text-sm font-black text-[#15372b]">{fallback(value)}</p></div></div>;
+const profileFields = {
+  primary: [
+    ["firstName", "First name"], ["middleName", "Middle name"], ["lastName", "Last name"], ["displayName", "Display name"],
+    ["gender", "Gender", "select", [["", "Select"], ["male", "Male"], ["female", "Female"], ["non_binary", "Non-binary"], ["prefer_not_to_say", "Prefer not to say"]]],
+    ["dateOfBirth", "Date of birth", "date"],
+    ["maritalStatus", "Marital status", "select", [["", "Select"], ["single", "Single"], ["married", "Married"], ["divorced", "Divorced"], ["widowed", "Widowed"]]],
+    ["bloodGroup", "Blood group"],
+    ["physicallyHandicapped", "Physically handicapped", "select", [["", "Select"], ["no", "No"], ["yes", "Yes"], ["prefer_not_to_say", "Prefer not to say"]]],
+    ["nationality", "Nationality"]
+  ],
+  contact: [["personalEmail", "Personal email", "email"], ["mobileNumber", "Mobile number", "tel"], ["workNumber", "Work number", "tel"], ["residenceNumber", "Residence number", "tel"], ["location", "Location"]],
+  emergency: [["emergencyContactName", "Emergency contact name"], ["emergencyContactNumber", "Emergency contact number", "tel"]]
+};
+
+function InfoValue({ label, value }) {
+  return <div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p><p className="mt-1.5 text-sm font-bold text-[#15372b]">{show(value)}</p></div>;
+}
+
+function EditablePanel({ title, section, fields, form, editing, onEdit, onCancel, onChange, onSave, saving, readOnlyValues = {} }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6"><h3 className="text-xl font-black text-[#15372b]">{title}</h3>{editing ? <div className="flex gap-2"><button type="button" onClick={onCancel} className="rounded-xl border border-slate-200 p-2 text-slate-500" aria-label={`Cancel editing ${title}`}><X size={17} /></button><button type="button" disabled={saving} onClick={() => onSave(section)} className="inline-flex items-center gap-2 rounded-xl bg-[#064b36] px-3 py-2 text-xs font-black text-white disabled:opacity-60"><Save size={15} />Save</button></div> : <button type="button" onClick={() => onEdit(section)} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-black text-[#0b5d43] hover:bg-emerald-50"><Pencil size={16} />Edit</button>}</header>
+      <div className="grid gap-x-8 gap-y-6 p-5 sm:grid-cols-2 sm:p-6">
+        {fields.map(([field, label, type = "text", options]) => editing ? <label key={field}><span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</span>{type === "select" ? <select className={inputClass} value={form[field] || ""} onChange={(event) => onChange(field, event.target.value)}>{options.map(([value, optionLabel]) => <option key={value} value={value}>{optionLabel}</option>)}</select> : <input className={inputClass} type={type} value={form[field] || ""} onChange={(event) => onChange(field, event.target.value)} />}</label> : <InfoValue key={field} label={label} value={readOnlyValues[field] || (type === "select" ? titleCase(form[field]) : form[field])} />)}
+      </div>
+    </section>
+  );
 }
 
 function EmployeeIdCard({ user, onUserUpdated }) {
   const [photoUrl, setPhotoUrl] = useState("");
   const [flipped, setFlipped] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState("about");
+  const [editing, setEditing] = useState("");
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const employeeCode = user.employeeCode || `A2G-${String(user.id || "000000").slice(-6).toUpperCase()}`;
+  const displayName = user.displayName || user.name;
+  const makeForm = (source) => Object.fromEntries(Object.values(profileFields).flat().map(([field]) => [field, field === "dateOfBirth" && source[field] ? new Date(source[field]).toISOString().slice(0, 10) : source[field] || ""]));
+  const [form, setForm] = useState(() => makeForm(user));
+  const primaryReadOnly = useMemo(() => ({ displayName, dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "" }), [displayName, user.dateOfBirth]);
 
-  useEffect(() => {
-    let active = true;
-    if (user.hasProfilePhoto) getProfilePhoto().then((blob) => { if (active) setPhotoUrl(URL.createObjectURL(blob)); }).catch(() => { if (active) setMessage("Saved profile photo could not be loaded."); });
-    return () => { active = false; };
-  }, [user.hasProfilePhoto]);
+  useEffect(() => { setForm(makeForm(user)); }, [user]);
+  useEffect(() => { let active = true; if (user.hasProfilePhoto) getProfilePhoto().then((blob) => { if (active) setPhotoUrl(URL.createObjectURL(blob)); }).catch(() => {}); return () => { active = false; }; }, [user.hasProfilePhoto]);
   useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
 
   async function handlePhoto(event) {
-    const file = event.target.files?.[0]; event.target.value = "";
-    if (!file) return;
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) return setMessage("Choose a JPG, PNG or WebP image.");
     if (file.size > 4 * 1024 * 1024) return setMessage("Profile photo must be 4 MB or smaller.");
-    setUploading(true); setMessage("");
-    const body = new FormData(); body.append("photo", file);
-    try {
-      await uploadProfilePhoto(body); setPhotoUrl(URL.createObjectURL(file));
-      onUserUpdated?.((current) => ({ ...current, hasProfilePhoto: true }));
-      setMessage("Profile photo updated successfully.");
-    } catch (error) { setMessage(error.response?.data?.message || "Could not upload profile photo."); }
-    finally { setUploading(false); }
+    setUploading(true); setMessage(""); const body = new FormData(); body.append("photo", file);
+    try { await uploadProfilePhoto(body); setPhotoUrl(URL.createObjectURL(file)); onUserUpdated?.((current) => ({ ...current, hasProfilePhoto: true })); setMessage("Profile photo updated successfully."); }
+    catch (error) { setMessage(error.response?.data?.message || "Could not upload profile photo."); } finally { setUploading(false); }
   }
 
-  function toggleCard(event) {
-    if (event.type === "keydown" && !["Enter", " "].includes(event.key)) return;
-    if (event.type === "keydown") event.preventDefault();
-    setFlipped((current) => !current);
+  async function saveSection() {
+    setSaving(true); setMessage("");
+    try { const updated = await updateOwnProfile(form); onUserUpdated?.(updated); setEditing(""); setMessage("Profile details updated successfully."); }
+    catch (error) { setMessage(error.response?.data?.message || "Could not update profile details."); } finally { setSaving(false); }
   }
+
+  function cancelEdit() { setForm(makeForm(user)); setEditing(""); }
 
   return (
-    <section className="relative isolate overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-[#f8f4ea] via-[#eef7e7] to-[#dff0dd] px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
-      <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-[#bfff2f]/25 blur-3xl" /><div className="absolute -right-24 -top-20 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl" />
-      <div className="relative mx-auto grid max-w-6xl gap-10 xl:grid-cols-[430px_1fr] xl:items-center">
-        <div className="mx-auto w-full max-w-[390px]">
-          <div className="mx-auto mb-[-9px] h-8 w-28 rounded-t-[1.2rem] bg-[#112d24] shadow-lg"><div className="mx-auto h-full w-12 rounded-full border-[7px] border-[#d4ddd7] bg-[#f8f4ea]" /></div>
-          <div className="group [perspective:1800px]" role="button" tabIndex={0} aria-label="Employee ID card. Hover, click or press Enter to flip." onClick={toggleCard} onKeyDown={toggleCard}>
-            <div className={`relative aspect-[3/4.65] w-full transition-transform duration-700 ease-[cubic-bezier(.2,.75,.25,1)] [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
-              <article className="absolute inset-0 overflow-hidden rounded-[2rem] border border-white bg-[#f7faf7] shadow-[0_30px_70px_-25px_rgba(6,75,54,.55)] [backface-visibility:hidden]">
-                <div className="relative h-[61%] overflow-hidden bg-gradient-to-br from-[#eef4ef] to-[#dfe9e2]">
-                  <div className="absolute right-5 top-5 z-10 rounded-xl bg-white/90 p-2.5 shadow-lg backdrop-blur"><img src={logoUrl} alt="A2G company logo" className="h-8 w-20 object-contain" /></div>
-                  {photoUrl ? <img src={photoUrl} alt={`${user.name} profile`} className="h-full w-full object-cover object-top" /> : <div className="flex h-full flex-col items-center justify-center bg-[radial-gradient(circle_at_50%_35%,#d7f2c2,transparent_42%),linear-gradient(145deg,#edf4ee,#d8e5dc)]"><span className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-white bg-[#064b36] text-5xl font-black text-white shadow-xl">{initials(user.name)}</span><p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-[#426355]">Add your portrait</p></div>}
-                  <label className="absolute bottom-4 left-4 z-10 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white/95 px-3.5 py-2.5 text-xs font-black text-[#064b36] shadow-lg transition hover:bg-[#bfff2f]" onClick={(event) => event.stopPropagation()}>{uploading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}{uploading ? "Uploading..." : photoUrl ? "Change photo" : "Upload photo"}<input disabled={uploading} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" className="sr-only" onChange={handlePhoto} /></label>
-                </div>
-                <div className="relative flex h-[39%] flex-col bg-[#10231d] px-7 pb-6 pt-7 text-white">
-                  <div className="absolute -top-10 left-0 h-12 w-[67%] bg-[#10231d] [clip-path:polygon(0_83%,82%_83%,100%_100%,0_100%)]" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#bfff2f]">Official employee</p><h1 className="mt-2 text-3xl font-black leading-tight tracking-tight">{user.name}</h1><p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-100">{fallback(user.designation || user.role)}</p>
-                  <div className="mt-auto flex items-end justify-between gap-4 border-t border-white/15 pt-4"><div><p className="text-[9px] font-black uppercase tracking-widest text-emerald-200/60">Employee code</p><p className="mt-1 font-mono text-sm font-black">{employeeCode}</p></div><span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-100/70"><FlipHorizontal2 size={13} />Flip</span></div>
-                </div>
-              </article>
-              <article className="absolute inset-0 overflow-hidden rounded-[2rem] border border-white/60 bg-[#f8f4ea] shadow-[0_30px_70px_-25px_rgba(6,75,54,.55)] [backface-visibility:hidden] [transform:rotateY(180deg)]">
-                <div className="h-2.5 bg-[#bfff2f]" /><div className="flex h-[calc(100%-0.625rem)] flex-col p-7">
-                  <header className="flex items-center justify-between gap-4"><img src={logoUrl} alt="A2G company logo" className="h-10 w-24 object-contain object-left" /><span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[#064b36]"><BadgeCheck size={13} />Verified</span></header>
-                  <div className="mt-7"><p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0b5d43]">Employee information</p><h2 className="mt-2 text-2xl font-black text-[#15372b]">{user.name}</h2></div>
-                  <div className="mt-5 grid gap-3"><DetailRow icon={Mail} label="Email" value={user.email} /><DetailRow icon={BriefcaseBusiness} label="Department" value={user.department} /><DetailRow icon={UsersRound} label="Team name" value={user.teamName} /><DetailRow icon={UserRound} label="Manager" value={user.managerName || user.managerEmail} /></div>
-                  <div className="mt-auto flex items-end justify-between border-t border-emerald-900/10 pt-5"><div><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Employee code</p><p className="mt-1 font-mono text-sm font-black text-[#15372b]">{employeeCode}</p></div><ShieldCheck className="text-[#064b36]" size={30} /></div>
-                </div>
-              </article>
+    <section className="relative overflow-hidden rounded-[2.5rem] border border-emerald-900/5 bg-[#f5f7f4] shadow-sm">
+      <div className="grid min-h-[760px] xl:grid-cols-[390px_1fr]">
+        <aside className="relative overflow-hidden bg-gradient-to-b from-[#edf5df] to-[#dff1e2] px-5 pb-10 pt-2 sm:px-8">
+          <div className="absolute -left-24 top-24 h-64 w-64 rounded-full bg-[#bfff2f]/30 blur-3xl" />
+          <div className="relative mx-auto flex w-full max-w-[330px] flex-col items-center">
+            <div className="h-20 w-7 bg-[#10231d] shadow-lg" /><div className="z-10 -mt-1 h-12 w-12 rounded-full border-[7px] border-[#c7d0cb] bg-transparent shadow-md" /><div className="z-10 -mt-1 h-11 w-5 rounded-b-xl bg-gradient-to-b from-slate-300 to-slate-500 shadow-md" />
+            <div className="-mt-2 w-full [perspective:1800px]">
+              <div className={`relative aspect-[3/4.6] w-full transition-transform duration-700 ease-[cubic-bezier(.2,.75,.25,1)] [transform-style:preserve-3d] ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
+                <article className="absolute inset-0 overflow-hidden rounded-[1.8rem] border border-white bg-[#f7faf7] shadow-[0_28px_55px_-20px_rgba(6,75,54,.55)] [backface-visibility:hidden]">
+                  <div className="relative h-[61%] overflow-hidden bg-[#e5eee8]"><img src={logoUrl} alt="A2G company logo" className="absolute right-4 top-4 z-10 h-8 w-20 rounded-lg bg-white/90 p-2 shadow" />{photoUrl ? <img src={photoUrl} alt={`${displayName} profile`} className="h-full w-full object-cover object-top" /> : <div className="flex h-full flex-col items-center justify-center"><span className="flex h-28 w-28 items-center justify-center rounded-full border-4 border-white bg-[#064b36] text-4xl font-black text-white shadow-xl">{initials(displayName)}</span><p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-[#426355]">Add your portrait</p></div>}<label className="absolute bottom-3 left-3 z-20 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black text-[#064b36] shadow-lg hover:bg-[#bfff2f]">{uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}{uploading ? "Uploading" : photoUrl ? "Change photo" : "Upload photo"}<input disabled={uploading} type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" className="sr-only" onChange={handlePhoto} /></label></div>
+                  <div className="relative flex h-[39%] flex-col bg-[#10231d] px-6 pb-5 pt-6 text-white"><div className="absolute -top-9 left-0 h-10 w-[70%] bg-[#10231d] [clip-path:polygon(0_80%,82%_80%,100%_100%,0_100%)]" /><p className="text-[9px] font-black uppercase tracking-[0.24em] text-[#bfff2f]">Official employee</p><h1 className="mt-2 text-2xl font-black leading-tight">{displayName}</h1><p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-100">{show(user.designation || user.role)}</p><div className="mt-auto border-t border-white/15 pt-3"><p className="text-[8px] font-black uppercase tracking-widest text-emerald-200/60">Employee code</p><p className="mt-1 font-mono text-xs font-black">{employeeCode}</p></div></div>
+                </article>
+                <article className="absolute inset-0 overflow-hidden rounded-[1.8rem] border border-white bg-[#fffdf5] shadow-2xl [backface-visibility:hidden] [transform:rotateY(180deg)]"><div className="h-2 bg-[#bfff2f]" /><div className="flex h-[calc(100%-0.5rem)] flex-col p-6"><div className="flex items-center justify-between"><img src={logoUrl} alt="A2G company logo" className="h-9 w-20 object-contain" /><BadgeCheck className="text-[#064b36]" /></div><h2 className="mt-6 text-xl font-black text-[#15372b]">Employee details</h2><div className="mt-5 space-y-4">{[[Mail,"Email",user.email],[BriefcaseBusiness,"Department",user.department],[UsersRound,"Team",user.teamName],[UserRound,"Manager",user.managerName || user.managerEmail]].map(([Icon,label,value]) => <div key={label} className="flex items-center gap-3 border-b border-slate-200 pb-3"><Icon size={16} className="shrink-0 text-[#0b5d43]" /><div className="min-w-0"><p className="text-[8px] font-black uppercase tracking-widest text-slate-400">{label}</p><p className="mt-1 truncate text-xs font-bold text-[#15372b]">{show(value)}</p></div></div>)}</div><div className="mt-auto font-mono text-xs font-black text-[#064b36]">{employeeCode}</div></div></article>
+              </div>
             </div>
+            <button type="button" onClick={() => setFlipped((current) => !current)} className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#064b36] px-5 py-2.5 text-xs font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#0b5d43]"><FlipHorizontal2 size={16} />{flipped ? "Show front" : "Flip ID card"}</button>
           </div>
-        </div>
-        <div className="rounded-[2.25rem] border border-white/80 bg-white/75 p-6 shadow-xl backdrop-blur sm:p-9">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#eaf7df] px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#064b36]"><BadgeCheck size={16} />Digital employee identity</span>
-          <h2 className="mt-6 max-w-xl text-4xl font-black leading-[1.08] tracking-tight text-[#15372b] sm:text-5xl">Your identity,<br /><span className="text-[#0b7a54]">beautifully presented.</span></h2>
-          <p className="mt-5 max-w-xl text-sm leading-7 text-slate-600">Upload a clear portrait and your official card updates instantly. Hover over the card—or tap it on mobile—to reveal your workplace details.</p>
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">{[["Identity", user.designation || user.role], ["Team", user.teamName || "General"], ["Account", user.status]].map(([label, value]) => <div key={label} className="rounded-2xl border border-emerald-900/10 bg-[#f7faef] p-4"><p className="text-[9px] font-black uppercase tracking-widest text-[#0b5d43]">{label}</p><p className="mt-2 truncate text-sm font-black capitalize text-[#15372b]">{value}</p></div>)}</div>
-          {message ? <p className="mt-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
-        </div>
+        </aside>
+
+        <main className="min-w-0 bg-[#f8faf9] p-5 sm:p-8 lg:p-10">
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{[[Mail,user.email],[Phone,user.mobileNumber || user.workNumber],[MapPin,user.location],[IdCard,employeeCode]].map(([Icon,value], index) => <div key={index} className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#0b5d43]"><Icon size={18} /></span><p className="truncate text-sm font-bold text-[#15372b]">{show(value)}</p></div>)}</div>
+            <div className="mt-5 grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-2"><InfoValue label="Department" value={user.department} /><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Reporting manager</p><div className="mt-2 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#8ac567] text-xs font-black text-white">{initials(user.managerName || user.managerEmail || "NA")}</span><p className="text-sm font-bold text-[#0b5d43]">{show(user.managerName || user.managerEmail)}</p></div></div></div>
+          </section>
+
+          <nav className="mt-7 flex gap-2 border-b border-slate-200" aria-label="Profile sections">{[["about","About",CreditCard],["profile","Profile",UserRound]].map(([value,label,Icon]) => <button key={value} type="button" onClick={() => setActiveTab(value)} className={`inline-flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-black transition ${activeTab === value ? "border-[#064b36] text-[#064b36]" : "border-transparent text-slate-400 hover:text-slate-700"}`}><Icon size={17} />{label}</button>)}</nav>
+          {message ? <p className="mt-5 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
+
+          {activeTab === "about" ? <div className="mt-6 space-y-6"><section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-2xl font-black text-[#15372b]">Primary Details</h3><div className="mt-6 grid gap-x-12 gap-y-7 sm:grid-cols-2">{profileFields.primary.filter(([field]) => field !== "displayName").map(([field,label,type]) => <InfoValue key={field} label={label} value={field === "dateOfBirth" ? primaryReadOnly.dateOfBirth : type === "select" ? titleCase(user[field]) : user[field]} />)}</div></section><section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-2xl font-black text-[#15372b]">Emergency Details</h3><div className="mt-6 grid gap-7 sm:grid-cols-2"><InfoValue label="Emergency contact name" value={user.emergencyContactName} /><InfoValue label="Emergency contact number" value={user.emergencyContactNumber} /></div></section></div> : null}
+
+          {activeTab === "profile" ? <div className="mt-6 grid gap-6 lg:grid-cols-2"><EditablePanel title="Primary Details" section="primary" fields={profileFields.primary} form={form} editing={editing === "primary"} onEdit={setEditing} onCancel={cancelEdit} onChange={(field,value) => setForm((current) => ({ ...current, [field]: value }))} onSave={saveSection} saving={saving} readOnlyValues={primaryReadOnly} /><EditablePanel title="Contact Details" section="contact" fields={profileFields.contact} form={form} editing={editing === "contact"} onEdit={setEditing} onCancel={cancelEdit} onChange={(field,value) => setForm((current) => ({ ...current, [field]: value }))} onSave={saveSection} saving={saving} readOnlyValues={{ personalEmail: user.personalEmail }} /><div className="lg:col-span-2"><EditablePanel title="Emergency Details" section="emergency" fields={profileFields.emergency} form={form} editing={editing === "emergency"} onEdit={setEditing} onCancel={cancelEdit} onChange={(field,value) => setForm((current) => ({ ...current, [field]: value }))} onSave={saveSection} saving={saving} /></div></div> : null}
+        </main>
       </div>
     </section>
   );
