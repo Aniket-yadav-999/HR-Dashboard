@@ -3,6 +3,7 @@ import axios from "axios";
 const apiBaseUrl = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 const directBackendBaseUrl = (import.meta.env.VITE_DIRECT_API_URL || "https://hr-dashboard-ynkt.onrender.com/api").replace(/\/$/, "");
 const reimbursementBaseUrl = import.meta.env.PROD ? `${directBackendBaseUrl}/hr-operations/reimbursements` : "/hr-operations/reimbursements";
+const profilePhotoUrl = import.meta.env.PROD ? `${directBackendBaseUrl}/auth/profile-photo` : "/auth/profile-photo";
 
 const api = axios.create({
   baseURL: apiBaseUrl
@@ -175,6 +176,16 @@ export async function bulkReplaceAssets(assets) {
 
 export async function getNotifications() {
   const response = await api.get("/notifications");
+  return response.data;
+}
+
+export async function uploadProfilePhoto(formData) {
+  const response = await api.post(profilePhotoUrl, formData);
+  return response.data;
+}
+
+export async function getProfilePhoto() {
+  const response = await api.get(profilePhotoUrl, { responseType: "blob" });
   return response.data;
 }
 

@@ -81,7 +81,11 @@ const userSchema = new mongoose.Schema(
     avatarColor: {
       type: String,
       default: "#0f766e"
-    }
+    },
+    profilePhotoFileName: { type: String, default: "", trim: true },
+    profilePhotoMimeType: { type: String, default: "" },
+    profilePhotoSize: { type: Number, default: 0 },
+    profilePhotoData: { type: Buffer, select: false }
   },
   { timestamps: true }
 );

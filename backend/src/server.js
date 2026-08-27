@@ -65,9 +65,10 @@ app.use("/api/messages", messageRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  if (err.name === "MulterError" || err.message?.startsWith("Proof must be")) {
+  if (err.name === "MulterError" || err.message?.startsWith("Proof must be") || err.message?.startsWith("Profile photo must be")) {
+    const isProfilePhoto = err.field === "photo" || err.message?.startsWith("Profile photo");
     return res.status(400).json({
-      message: err.code === "LIMIT_FILE_SIZE" ? "Proof file must be 10 MB or smaller" : err.message
+      message: err.code === "LIMIT_FILE_SIZE" ? (isProfilePhoto ? "Profile photo must be 4 MB or smaller" : "Proof file must be 10 MB or smaller") : err.message
     });
   }
   res.status(err.status || 500).json({

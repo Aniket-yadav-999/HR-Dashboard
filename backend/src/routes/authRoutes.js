@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import { Session } from "../models/Session.js";
 import { User } from "../models/User.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -7,6 +8,14 @@ import { sendOtpEmail, sendPasswordResetEmail } from "../services/mailService.js
 import { generateOtp, generateToken, hashOtp, hashPassword, verifyPassword } from "../utils/password.js";
 
 const router = Router();
+const profilePhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    const valid = ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) && /\.(jpe?g|png|webp)$/i.test(file.originalname);
+    callback(valid ? null : new Error("Profile photo must be a JPG, PNG or WebP image"), valid);
+  }
+});
 
 function publicUser(user) {
   return {
@@ -23,7 +32,8 @@ function publicUser(user) {
     managerName: user.managerName,
     joinedAt: user.joinedAt,
     dateOfBirth: user.dateOfBirth,
-    avatarColor: user.avatarColor
+    avatarColor: user.avatarColor,
+    hasProfilePhoto: Boolean(user.profilePhotoMimeType)
   };
 }
 
@@ -183,6 +193,29 @@ router.post("/reset-password", async (req, res, next) => {
 
 router.get("/me", requireAuth, (req, res) => {
   res.json(publicUser(req.user));
+});
+
+router.get("/profile-photo", requireAuth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select("+profilePhotoData");
+    if (!user?.profilePhotoData) return res.status(404).json({ message: "Profile photo not found" });
+    res.set("Content-Type", user.profilePhotoMimeType);
+    res.set("Cache-Control", "private, max-age=3600");
+    res.send(user.profilePhotoData);
+  } catch (error) { next(error); }
+});
+
+router.post("/profile-photo", requireAuth, profilePhotoUpload.single("photo"), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Please choose a profile photo" });
+    await User.findByIdAndUpdate(req.user._id, {
+      profilePhotoFileName: req.file.originalname,
+      profilePhotoMimeType: req.file.mimetype,
+      profilePhotoSize: req.file.size,
+      profilePhotoData: req.file.buffer
+    });
+    res.json({ message: "Profile photo updated", hasProfilePhoto: true });
+  } catch (error) { next(error); }
 });
 
 router.post("/logout", requireAuth, async (req, res, next) => {
