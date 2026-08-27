@@ -60,6 +60,16 @@ function formatDate(date) {
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(date));
 }
 
+function ApprovalComment({ status, comment }) {
+  if (!comment) return null;
+  const approved = status === "approved";
+  return (
+    <p className={`inline-flex rounded-lg px-2.5 py-1.5 font-semibold ${approved ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+      {approved ? "Approved" : "Rejected"} - ({comment})
+    </p>
+  );
+}
+
 function formatHolidayDate(date) {
   return new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${date}T00:00:00`));
 }
@@ -827,6 +837,8 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
               ) : tableRecords.length ? (
                 visibleRecords.map((record) => {
                   const option = options.find((item) => item.value === record.type);
+                  const managerDecision = record.approvalStatus === "rejected" && !record.hrActionBy ? "rejected" : "approved";
+                  const hrDecision = record.approvalStatus === "rejected" ? "rejected" : "approved";
                   return (
                     <tr key={record.id} className="transition hover:bg-[#eff6df]">
                       <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">{formatDate(record.fromDate || record.date)}{record.toDate && new Date(record.toDate).toDateString() !== new Date(record.fromDate || record.date).toDateString() ? ` – ${formatDate(record.toDate)}` : ""}<p className="mt-1 text-xs capitalize text-slate-400">{record.dayPortion?.replace("_", " ")}</p></td>
@@ -847,7 +859,7 @@ function AttendanceLeave({ user, users = [], onSubmitted }) {
                         </span>
                       </td>
                       <td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black capitalize text-slate-700">{(record.approvalStatus || "not_required").replace(/_/g, " ")}</span></td>
-                      <td className="max-w-56 px-5 py-4 text-xs text-slate-500">{record.managerComment ? <p><b>Manager:</b> {record.managerComment}</p> : null}{record.hrComment ? <p className="mt-1"><b>HR:</b> {record.hrComment}</p> : null}{!record.managerComment && !record.hrComment ? "—" : null}</td>
+                      <td className="max-w-64 px-5 py-4 text-xs"><div className="flex flex-col items-start gap-1.5">{record.managerComment ? <ApprovalComment status={managerDecision} comment={record.managerComment} /> : null}{record.hrComment ? <ApprovalComment status={hrDecision} comment={record.hrComment} /> : null}{!record.managerComment && !record.hrComment ? <span className="text-slate-400">—</span> : null}</div></td>
                       <td className="px-5 py-4"><div className="flex min-w-48 flex-wrap gap-2">
                         {record.approvalStatus === "pending_manager" && user.role === "manager" && record.employeeEmail !== user.email ? <><button onClick={() => handleStatusAction(record, "approve")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white">Approve</button><button onClick={() => handleStatusAction(record, "reject")} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-black text-white">Reject</button></> : null}
                         {record.approvalStatus === "pending_hr" && ["admin", "hr"].includes(user.role) ? <><button onClick={() => handleStatusAction(record, "approve")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white">Approve</button><button onClick={() => handleStatusAction(record, "reject")} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-black text-white">Reject</button></> : null}
