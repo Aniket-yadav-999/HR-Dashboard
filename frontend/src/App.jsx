@@ -222,7 +222,7 @@ function App() {
               {activeView === "organization" ? <OrganizationTree currentUser={user} users={users} /> : null}
               {activeView === "assets" && ["admin", "hr"].includes(user.role) ? <AssetManagement currentUser={user} users={users} onChanged={loadNotifications} /> : null}
               {activeView === "helpdesk" ? <HelpdeskRequests currentUser={user} onChanged={loadNotifications} /> : null}
-              {(["documents", "appraisals"].includes(activeView) || (activeView === "reimbursements" && ["admin", "hr"].includes(user.role))) ? (
+              {(["documents", "appraisals", "reimbursements"].includes(activeView)) ? (
                 <HrOperations activeSection={activeView} currentUser={user} users={users} />
               ) : null}
               {activeView === "notifications" ? <NotificationsPanel notifications={notifications} /> : null}
