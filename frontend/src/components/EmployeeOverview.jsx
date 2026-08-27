@@ -70,6 +70,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
               <thead>
                 <tr className="bg-[#064b36] text-xs uppercase tracking-widest text-white">
                   <th className="px-4 py-4 font-bold">Employee</th>
+                  <th className="px-4 py-4 font-bold">Employee Code</th>
                   <th className="px-4 py-4 font-bold">Dept</th>
                   <th className="px-4 py-4 font-bold">Role</th>
                   <th className="px-4 py-4 font-bold">Status</th>
@@ -94,6 +95,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
                         </div>
                       </div>
                     </td>
+                    <td className="px-4 py-4 font-mono text-xs font-bold text-[#064b36]">{user.employeeCode || "Not assigned"}</td>
                     <td className="px-4 py-4 text-slate-700">{user.department}</td>
                     <td className="px-4 py-4 capitalize text-slate-700">{user.role}</td>
                     <td className="px-4 py-4">
@@ -136,7 +138,7 @@ function EmployeeOverview({ users, currentUser, onEditUser, onDeleteUser }) {
                 ))}
                 {!users.length ? (
                   <tr>
-                    <td className="px-5 py-10 text-center text-slate-500" colSpan={canManageUsers ? 6 : 5}>
+                    <td className="px-5 py-10 text-center text-slate-500" colSpan={canManageUsers ? 7 : 6}>
                       {canManageUsers ? "No employees yet. Admin can create users from the panel." : "No team members are assigned to you yet."}
                     </td>
                   </tr>

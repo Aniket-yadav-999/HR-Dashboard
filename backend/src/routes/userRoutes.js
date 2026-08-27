@@ -12,6 +12,7 @@ function toUserCard(user) {
     id: user._id,
     name: user.name,
     email: user.email,
+    employeeCode: user.employeeCode,
     role: user.role,
     status: user.status,
     department: user.department,
@@ -32,6 +33,7 @@ function toOverviewUserCard(user) {
     id: user._id,
     name: user.name,
     email: user.email,
+    employeeCode: user.employeeCode,
     role: user.role,
     status: user.status,
     department: user.department,
@@ -92,6 +94,7 @@ function buildUserPayload(body, existingUser) {
   const payload = {
     name: body.name,
     email: body.email?.toLowerCase(),
+    employeeCode: body.employeeCode?.trim().toUpperCase(),
     role: roles.includes(body.role) ? body.role : "employee",
     status,
     department: body.department || "People Operations",
@@ -105,8 +108,8 @@ function buildUserPayload(body, existingUser) {
     exitedAt: status === "exited" ? existingUser?.exitedAt || new Date() : undefined
   };
 
-  if (!payload.name || !payload.email) {
-    throw new Error("Name and email are required");
+  if (!payload.name || !payload.email || !payload.employeeCode) {
+    throw new Error("Name, email and employee code are required");
   }
 
   return payload;
@@ -144,6 +147,7 @@ router.post("/", requireAuth, requireHrOrAdmin, async (req, res, next) => {
     if (exists) {
       return res.status(409).json({ message: "User already exists" });
     }
+    if (await User.exists({ employeeCode: payload.employeeCode })) return res.status(409).json({ message: "Employee code already exists" });
 
     const colors = ["#0f766e", "#2563eb", "#7c3aed", "#be123c", "#b45309", "#475569"];
     const user = await User.create({
@@ -154,7 +158,7 @@ router.post("/", requireAuth, requireHrOrAdmin, async (req, res, next) => {
 
     res.status(201).json(toUserCard(user));
   } catch (error) {
-    if (error.message === "Name and email are required") {
+    if (error.message === "Name, email and employee code are required") {
       return res.status(400).json({ message: error.message });
     }
     next(error);
@@ -175,6 +179,7 @@ router.put("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
     if (duplicate) {
       return res.status(409).json({ message: "Email already exists" });
     }
+    if (await User.exists({ employeeCode: payload.employeeCode, _id: { $ne: user._id } })) return res.status(409).json({ message: "Employee code already exists" });
 
     Object.assign(user, payload);
 
@@ -185,7 +190,7 @@ router.put("/:id", requireAuth, requireHrOrAdmin, async (req, res, next) => {
     await user.save();
     res.json(toUserCard(user));
   } catch (error) {
-    if (error.message === "Name and email are required") {
+    if (error.message === "Name, email and employee code are required") {
       return res.status(400).json({ message: error.message });
     }
     next(error);
