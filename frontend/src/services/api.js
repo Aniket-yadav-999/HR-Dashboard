@@ -189,6 +189,11 @@ export async function getProfilePhoto() {
   return response.data;
 }
 
+export async function updateOwnProfile(payload) {
+  const response = await api.patch("/auth/profile", payload);
+  return response.data;
+}
+
 export async function getHrDocuments() {
   const response = await api.get("/hr-operations/documents");
   return response.data;

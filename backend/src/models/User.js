@@ -70,6 +70,22 @@ const userSchema = new mongoose.Schema(
       default: "",
       trim: true
     },
+    firstName: { type: String, default: "", trim: true },
+    middleName: { type: String, default: "", trim: true },
+    lastName: { type: String, default: "", trim: true },
+    displayName: { type: String, default: "", trim: true },
+    gender: { type: String, enum: ["", "male", "female", "non_binary", "prefer_not_to_say"], default: "" },
+    maritalStatus: { type: String, enum: ["", "single", "married", "divorced", "widowed"], default: "" },
+    bloodGroup: { type: String, default: "", trim: true },
+    physicallyHandicapped: { type: String, enum: ["", "yes", "no", "prefer_not_to_say"], default: "" },
+    nationality: { type: String, default: "", trim: true },
+    personalEmail: { type: String, default: "", lowercase: true, trim: true },
+    mobileNumber: { type: String, default: "", trim: true },
+    workNumber: { type: String, default: "", trim: true },
+    residenceNumber: { type: String, default: "", trim: true },
+    location: { type: String, default: "", trim: true },
+    emergencyContactName: { type: String, default: "", trim: true },
+    emergencyContactNumber: { type: String, default: "", trim: true },
     joinedAt: {
       type: Date,
       default: Date.now

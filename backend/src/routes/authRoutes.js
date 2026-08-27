@@ -33,7 +33,23 @@ function publicUser(user) {
     joinedAt: user.joinedAt,
     dateOfBirth: user.dateOfBirth,
     avatarColor: user.avatarColor,
-    hasProfilePhoto: Boolean(user.profilePhotoMimeType)
+    hasProfilePhoto: Boolean(user.profilePhotoMimeType),
+    firstName: user.firstName,
+    middleName: user.middleName,
+    lastName: user.lastName,
+    displayName: user.displayName,
+    gender: user.gender,
+    maritalStatus: user.maritalStatus,
+    bloodGroup: user.bloodGroup,
+    physicallyHandicapped: user.physicallyHandicapped,
+    nationality: user.nationality,
+    personalEmail: user.personalEmail,
+    mobileNumber: user.mobileNumber,
+    workNumber: user.workNumber,
+    residenceNumber: user.residenceNumber,
+    location: user.location,
+    emergencyContactName: user.emergencyContactName,
+    emergencyContactNumber: user.emergencyContactNumber
   };
 }
 
@@ -215,6 +231,19 @@ router.post("/profile-photo", requireAuth, profilePhotoUpload.single("photo"), a
       profilePhotoData: req.file.buffer
     });
     res.json({ message: "Profile photo updated", hasProfilePhoto: true });
+  } catch (error) { next(error); }
+});
+
+router.patch("/profile", requireAuth, async (req, res, next) => {
+  try {
+    const fields = ["firstName", "middleName", "lastName", "displayName", "gender", "maritalStatus", "bloodGroup", "physicallyHandicapped", "nationality", "personalEmail", "mobileNumber", "workNumber", "residenceNumber", "location", "emergencyContactName", "emergencyContactNumber", "dateOfBirth"];
+    const update = {};
+    fields.forEach((field) => {
+      if (req.body[field] !== undefined) update[field] = typeof req.body[field] === "string" ? req.body[field].trim() : req.body[field];
+    });
+    if (update.personalEmail && !/^\S+@\S+\.\S+$/.test(update.personalEmail)) return res.status(400).json({ message: "Enter a valid personal email" });
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true, runValidators: true });
+    res.json(publicUser(user));
   } catch (error) { next(error); }
 });
 
