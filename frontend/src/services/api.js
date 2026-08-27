@@ -1,6 +1,8 @@
 import axios from "axios";
 
 const apiBaseUrl = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+const directBackendBaseUrl = (import.meta.env.VITE_DIRECT_API_URL || "https://hr-dashboard-ynkt.onrender.com/api").replace(/\/$/, "");
+const reimbursementBaseUrl = import.meta.env.PROD ? `${directBackendBaseUrl}/hr-operations/reimbursements` : "/hr-operations/reimbursements";
 
 const api = axios.create({
   baseURL: apiBaseUrl
@@ -242,7 +244,7 @@ export async function getReimbursements() {
 }
 
 export async function createReimbursement(payload) {
-  const response = await api.post("/hr-operations/reimbursements", payload);
+  const response = await api.post(reimbursementBaseUrl, payload);
   return response.data;
 }
 
@@ -252,7 +254,7 @@ export async function updateReimbursement(id, payload) {
 }
 
 export async function downloadReimbursementProof(id, fileName) {
-  const response = await api.get(`/hr-operations/reimbursements/${id}/proof`, { responseType: "blob" });
+  const response = await api.get(`${reimbursementBaseUrl}/${id}/proof`, { responseType: "blob" });
   const url = URL.createObjectURL(response.data);
   const link = document.createElement("a");
   link.href = url;

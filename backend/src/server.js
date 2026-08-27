@@ -65,6 +65,11 @@ app.use("/api/messages", messageRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
+  if (err.name === "MulterError" || err.message?.startsWith("Proof must be")) {
+    return res.status(400).json({
+      message: err.code === "LIMIT_FILE_SIZE" ? "Proof file must be 10 MB or smaller" : err.message
+    });
+  }
   res.status(err.status || 500).json({
     message: err.status ? err.message : "Something went wrong"
   });
