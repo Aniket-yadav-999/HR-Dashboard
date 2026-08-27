@@ -1,8 +1,8 @@
-import { CheckCircle2, Download, FileText, FileUp, IndianRupee, Pencil, Plus, Save, Search, Star, XCircle } from "lucide-react";
+import { Download, FileText, FileUp, IndianRupee, Pencil, Plus, Save, Search, Star, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   createAppraisal, createReimbursement, downloadAppraisalPdf, downloadHrDocument, getAppraisals, getAppraisalTemplate, getHrDocuments,
-  getReimbursements, updateAppraisal, updateAppraisalTemplate, updateHrDocument, updateReimbursement, uploadHrDocument
+  downloadReimbursementProof, getReimbursements, updateAppraisal, updateAppraisalTemplate, updateHrDocument, updateReimbursement, uploadHrDocument
 } from "../services/api";
 import { PaginationControls, usePagination } from "./Pagination";
 
@@ -11,7 +11,8 @@ const statusColor = {
   draft: "bg-slate-100 text-slate-700", scheduled: "bg-sky-100 text-sky-700", in_review: "bg-amber-100 text-amber-700",
   completed: "bg-emerald-100 text-emerald-700", submitted: "bg-sky-100 text-sky-700",
   under_review: "bg-amber-100 text-amber-700", approved: "bg-emerald-100 text-emerald-700",
-  rejected: "bg-rose-100 text-rose-700", paid: "bg-violet-100 text-violet-700"
+  rejected: "bg-rose-100 text-rose-700", pending: "bg-amber-100 text-amber-700",
+  reviewed: "bg-sky-100 text-sky-700", paid: "bg-violet-100 text-violet-700"
 };
 
 function Header({ eyebrow, title, description, action }) {
@@ -269,36 +270,63 @@ function AppraisalQuestionnaire({ currentUser }) {
   </div>;
 }
 
-function Reimbursements({ users }) {
+function Reimbursements({ users, currentUser }) {
   const [items, setItems] = useState([]);
-  const [query, setQuery] = useState("");
-  const [form, setForm] = useState({ employee: "", category: "travel", amount: "", expenseDate: "", description: "", reference: "" });
+  const [activeTab, setActiveTab] = useState("claim");
+  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [form, setForm] = useState({ category: "", amount: "", expenseDate: "", description: "" });
+  const [proof, setProof] = useState(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const isReviewer = ["admin", "hr"].includes(currentUser?.role);
   const load = async () => setItems(await getReimbursements());
-  useEffect(() => { load(); }, []);
-  const matchingClaims = useMemo(() => items.filter((x) => `${x.employee?.name} ${x.description} ${x.status}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
+  useEffect(() => { load().catch(() => setMessage("Could not load reimbursement claims.")); }, []);
+  const matchingClaims = useMemo(() => items.filter((item) => !employeeFilter || (item.employee?._id || item.employee?.id) === employeeFilter), [items, employeeFilter]);
   const claimPages = usePagination(matchingClaims, 8);
   const shown = claimPages.pageItems;
-  async function submit(e) { e.preventDefault(); await createReimbursement(form); setForm({ ...form, employee: "", amount: "", expenseDate: "", description: "", reference: "" }); await load(); }
-  const pending = items.filter((x) => ["submitted","under_review"].includes(x.status)).reduce((s,x) => s + x.amount, 0);
+  async function submit(event) {
+    event.preventDefault();
+    if (!proof) return setMessage("Please attach a PDF, JPEG, JPG or PNG proof.");
+    setBusy(true); setMessage("");
+    const payload = new FormData();
+    Object.entries(form).forEach(([key, value]) => payload.append(key, value));
+    payload.append("proof", proof);
+    try {
+      await createReimbursement(payload);
+      setForm({ category: "", amount: "", expenseDate: "", description: "" }); setProof(null);
+      event.currentTarget.reset(); setMessage("Your reimbursement claim has been submitted to HR."); await load();
+    } catch (error) { setMessage(error.response?.data?.message || "Could not submit reimbursement claim."); } finally { setBusy(false); }
+  }
+  async function changeStatus(id, status) {
+    try { await updateReimbursement(id, { status }); setMessage(`Claim marked as ${status}.`); await load(); }
+    catch (error) { setMessage(error.response?.data?.message || "Could not update claim status."); }
+  }
+  const pending = items.filter((item) => ["pending", "submitted", "under_review"].includes(item.status)).reduce((sum, item) => sum + item.amount, 0);
   return (
     <>
-      <Header eyebrow="Expense operations" title="Reimbursement" description="Review employee claims, approve valid expenses and track payments from one queue." />
-      <div className="grid gap-4 sm:grid-cols-3">{[["Total claims", items.length],["Pending value", `₹${pending.toLocaleString("en-IN")}`],["Paid claims", items.filter((x) => x.status === "paid").length]].map(([l,v]) => <div key={l} className="rounded-2xl border bg-white p-5"><p className="text-xs font-black uppercase text-slate-400">{l}</p><p className="mt-2 text-3xl font-black text-[#064b36]">{v}</p></div>)}</div>
-      <form onSubmit={submit} className="grid gap-3 rounded-3xl bg-[#f8f4ea] p-5 md:grid-cols-3">
-        <select required className={inputClass} value={form.employee} onChange={(e) => setForm({...form, employee:e.target.value})}><option value="">Select employee</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
-        <select className={inputClass} value={form.category} onChange={(e) => setForm({...form, category:e.target.value})}>{["travel","food","medical","internet","office","other"].map((x) => <option key={x}>{x}</option>)}</select>
-        <div className="relative"><IndianRupee className="absolute left-3 top-3 text-slate-400" size={17}/><input required min="0" type="number" className={`${inputClass} pl-9`} value={form.amount} onChange={(e) => setForm({...form, amount:e.target.value})} placeholder="Amount"/></div>
-        <input required type="date" className={inputClass} value={form.expenseDate} onChange={(e) => setForm({...form, expenseDate:e.target.value})}/>
-        <input required className={inputClass} value={form.description} onChange={(e) => setForm({...form, description:e.target.value})} placeholder="Expense description"/>
-        <button className="rounded-xl bg-[#064b36] font-black text-white">Add claim</button>
-      </form>
-      <div className="relative max-w-md"><Search className="absolute left-3 top-3 text-slate-400" size={17}/><input className={`${inputClass} pl-9`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search claims"/></div>
-      <PaginationControls page={claimPages.page} totalPages={claimPages.totalPages} totalItems={matchingClaims.length} pageSize={8} onPageChange={claimPages.changePage} isPending={claimPages.isPending} />
-      <div className="grid gap-4 lg:grid-cols-2">{shown.map((item) => <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex justify-between gap-3"><div><p className="font-black text-[#15372b]">{item.employee?.name}</p><p className="mt-1 text-sm capitalize text-slate-500">{item.category} · {new Date(item.expenseDate).toLocaleDateString("en-IN")}</p></div><p className="text-xl font-black text-[#064b36]">₹{item.amount.toLocaleString("en-IN")}</p></div><p className="my-4 text-sm text-slate-600">{item.description}</p><div className="flex items-center justify-between"><Badge value={item.status}/><div className="flex gap-2">{!["approved","paid"].includes(item.status) ? <button onClick={async()=>{await updateReimbursement(item._id,{status:"approved"});await load();}} className="rounded-lg bg-emerald-100 p-2 text-emerald-700" title="Approve"><CheckCircle2 size={18}/></button>:null}{!["rejected","paid"].includes(item.status) ? <button onClick={async()=>{await updateReimbursement(item._id,{status:"rejected"});await load();}} className="rounded-lg bg-rose-100 p-2 text-rose-700" title="Reject"><XCircle size={18}/></button>:null}{item.status === "approved" ? <button onClick={async()=>{await updateReimbursement(item._id,{status:"paid"});await load();}} className="rounded-lg bg-violet-100 px-3 text-xs font-black text-violet-700">Mark paid</button>:null}</div></div></article>)}</div>
+      <Header eyebrow="Expense operations" title="Reimbursement" description="Submit expense claims with proof and follow their review and payment status." />
+      {isReviewer ? <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"><button type="button" onClick={() => setActiveTab("claim")} className={`rounded-xl px-5 py-2.5 text-sm font-black ${activeTab === "claim" ? "bg-[#064b36] text-white" : "text-slate-500"}`}>Add Claim</button><button type="button" onClick={() => setActiveTab("submissions")} className={`rounded-xl px-5 py-2.5 text-sm font-black ${activeTab === "submissions" ? "bg-[#064b36] text-white" : "text-slate-500"}`}>Employee Submissions ({items.length})</button></div> : null}
+      {message ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{message}</p> : null}
+      {activeTab === "claim" ? <>
+        <form onSubmit={submit} className="grid gap-4 rounded-3xl bg-[#f8f4ea] p-5 md:grid-cols-2 lg:grid-cols-3">
+          <label className="text-sm font-bold text-slate-700">Reason<select required className={`${inputClass} mt-2`} value={form.category} onChange={(e) => setForm({...form, category:e.target.value})}><option value="">Select reason</option>{["travel","food","office","other"].map((value) => <option key={value} value={value} className="capitalize">{value[0].toUpperCase() + value.slice(1)}</option>)}</select></label>
+          <label className="text-sm font-bold text-slate-700">Amount<div className="relative mt-2"><IndianRupee className="absolute left-3 top-3 text-slate-400" size={17}/><input required min="0.01" step="0.01" type="number" className={`${inputClass} pl-9`} value={form.amount} onChange={(e) => setForm({...form, amount:e.target.value})} placeholder="Enter amount"/></div></label>
+          <label className="text-sm font-bold text-slate-700">Expense date<input required type="date" max={new Date().toISOString().slice(0, 10)} className={`${inputClass} mt-2`} value={form.expenseDate} onChange={(e) => setForm({...form, expenseDate:e.target.value})}/></label>
+          <label className="text-sm font-bold text-slate-700 md:col-span-2">Description<textarea required rows="3" className={`${inputClass} mt-2 resize-y`} value={form.description} onChange={(e) => setForm({...form, description:e.target.value})} placeholder="Describe the expense"/></label>
+          <label className="text-sm font-bold text-slate-700">Attach proof<input required type="file" accept=".pdf,.jpeg,.jpg,.png,application/pdf,image/jpeg,image/png" className={`${inputClass} mt-2 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-100 file:px-3 file:py-1 file:font-bold file:text-[#064b36]`} onChange={(e) => setProof(e.target.files?.[0] || null)}/><span className="mt-1 block text-xs font-medium text-slate-500">PDF, JPEG, JPG or PNG · max 10 MB</span></label>
+          <button disabled={busy} className="rounded-xl bg-[#064b36] px-5 py-3 font-black text-white disabled:opacity-60 md:col-span-2 lg:col-span-3">{busy ? "Submitting..." : "Add claim"}</button>
+        </form>
+        <h2 className="text-xl font-black text-[#15372b]">My claims</h2>
+      </> : <>
+        <div className="grid gap-4 sm:grid-cols-3">{[["Total claims", items.length],["Pending value", `₹${pending.toLocaleString("en-IN")}`],["Paid claims", items.filter((item) => item.status === "paid").length]].map(([label,value]) => <div key={label} className="rounded-2xl border bg-white p-5"><p className="text-xs font-black uppercase text-slate-400">{label}</p><p className="mt-2 text-3xl font-black text-[#064b36]">{value}</p></div>)}</div>
+        <label className="block max-w-md text-sm font-bold text-slate-700">Filter by employee<select className={`${inputClass} mt-2`} value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)}><option value="">All employees</option>{users.map((user) => <option key={user.id || user._id} value={user.id || user._id}>{user.name}</option>)}</select></label>
+      </>}
+      {(activeTab === "submissions" || !isReviewer) ? <PaginationControls page={claimPages.page} totalPages={claimPages.totalPages} totalItems={matchingClaims.length} pageSize={8} onPageChange={claimPages.changePage} isPending={claimPages.isPending} /> : null}
+      {(activeTab === "submissions" || !isReviewer) ? <div className="grid gap-4 lg:grid-cols-2">{shown.map((item) => <article key={item._id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex justify-between gap-3"><div><p className="font-black text-[#15372b]">{item.employee?.name}</p><p className="mt-1 text-sm capitalize text-slate-500">{item.category} · {new Date(item.expenseDate).toLocaleDateString("en-IN")}</p></div><p className="text-xl font-black text-[#064b36]">₹{item.amount.toLocaleString("en-IN")}</p></div><p className="my-4 text-sm text-slate-600">{item.description}</p><div className="flex flex-wrap items-center justify-between gap-3"><Badge value={item.status}/><div className="flex flex-wrap gap-2"><button type="button" onClick={() => downloadReimbursementProof(item._id, item.proofFileName)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700"><Download size={15}/>Proof</button>{isReviewer ? <select className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black" value={["pending", "reviewed", "paid"].includes(item.status) ? item.status : "pending"} onChange={(e) => changeStatus(item._id, e.target.value)}><option value="pending">Pending</option><option value="reviewed">Reviewed</option><option value="paid">Paid</option></select> : null}</div></div></article>)}{!shown.length ? <p className="col-span-full py-10 text-center text-sm font-bold text-slate-500">No reimbursement claims found.</p> : null}</div> : null}
     </>
   );
 }
 
 export default function HrOperations({ activeSection, currentUser, users }) {
-  return <div className="space-y-6">{activeSection === "documents" ? <PolicyDocuments currentUser={currentUser} /> : activeSection === "appraisals" ? <AppraisalQuestionnaire currentUser={currentUser} /> : <Reimbursements users={users} />}</div>;
+  return <div className="space-y-6">{activeSection === "documents" ? <PolicyDocuments currentUser={currentUser} /> : activeSection === "appraisals" ? <AppraisalQuestionnaire currentUser={currentUser} /> : <Reimbursements users={users} currentUser={currentUser} />}</div>;
 }

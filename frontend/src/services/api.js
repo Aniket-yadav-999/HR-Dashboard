@@ -250,3 +250,13 @@ export async function updateReimbursement(id, payload) {
   const response = await api.patch(`/hr-operations/reimbursements/${id}`, payload);
   return response.data;
 }
+
+export async function downloadReimbursementProof(id, fileName) {
+  const response = await api.get(`/hr-operations/reimbursements/${id}/proof`, { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}

@@ -12,6 +12,16 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }
 });
+const reimbursementUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    const allowed = ["application/pdf", "image/jpeg", "image/png"];
+    const hasAllowedExtension = /\.(pdf|jpe?g|png)$/i.test(file.originalname);
+    const valid = allowed.includes(file.mimetype) && hasAllowedExtension;
+    callback(valid ? null : new Error("Proof must be a PDF, JPEG, JPG or PNG file"), valid);
+  }
+});
 const protect = [requireAuth, requireHrOrAdmin];
 const defaultAppraisalQuestions = [
   "How would you reflect on your performance during the period 2025–2026 (till date)?",
@@ -175,29 +185,50 @@ router.get("/appraisals/:id/pdf", ...protect, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get("/reimbursements", ...protect, async (_req, res, next) => {
+router.get("/reimbursements", requireAuth, async (req, res, next) => {
   try {
-    res.json(await Reimbursement.find().populate("employee", "name email department").sort({ createdAt: -1 }));
+    const filter = ["admin", "hr"].includes(req.user.role) ? {} : { employee: req.user._id };
+    res.json(await Reimbursement.find(filter).select("-proofData").populate("employee", "name email department designation").sort({ createdAt: -1 }));
   } catch (error) { next(error); }
 });
 
-router.post("/reimbursements", ...protect, async (req, res, next) => {
+router.post("/reimbursements", requireAuth, reimbursementUpload.single("proof"), async (req, res, next) => {
   try {
-    if (!req.body.employee || !req.body.amount || !req.body.expenseDate || !req.body.description) {
-      return res.status(400).json({ message: "Employee, amount, date and description are required" });
+    if (!req.body.category || !req.body.amount || !req.body.expenseDate || !req.body.description?.trim() || !req.file) {
+      return res.status(400).json({ message: "Reason, amount, date, description and proof are required" });
     }
-    const item = await Reimbursement.create({ ...req.body, createdBy: req.user._id });
-    res.status(201).json(await item.populate("employee", "name email department"));
+    const item = await Reimbursement.create({
+      employee: req.user._id, category: req.body.category, amount: req.body.amount,
+      expenseDate: req.body.expenseDate, description: req.body.description.trim(), status: "pending",
+      proofFileName: req.file.originalname, proofMimeType: req.file.mimetype,
+      proofSize: req.file.size, proofData: req.file.buffer, createdBy: req.user._id
+    });
+    await item.populate("employee", "name email department designation");
+    const result = item.toObject(); delete result.proofData;
+    res.status(201).json(result);
   } catch (error) { next(error); }
 });
 
 router.patch("/reimbursements/:id", ...protect, async (req, res, next) => {
   try {
-    const update = { ...req.body, reviewedBy: req.user._id };
+    if (!["pending", "reviewed", "paid"].includes(req.body.status)) return res.status(400).json({ message: "Invalid reimbursement status" });
+    const update = { status: req.body.status, reviewedBy: req.user._id };
     const item = await Reimbursement.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
-      .populate("employee", "name email department");
+      .select("-proofData").populate("employee", "name email department designation");
     if (!item) return res.status(404).json({ message: "Reimbursement not found" });
     res.json(item);
+  } catch (error) { next(error); }
+});
+
+router.get("/reimbursements/:id/proof", requireAuth, async (req, res, next) => {
+  try {
+    const item = await Reimbursement.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: "Reimbursement not found" });
+    const canAccess = ["admin", "hr"].includes(req.user.role) || item.employee.equals(req.user._id);
+    if (!canAccess) return res.status(403).json({ message: "You cannot access this proof" });
+    res.set("Content-Type", item.proofMimeType);
+    res.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(item.proofFileName)}`);
+    res.send(item.proofData);
   } catch (error) { next(error); }
 });
 

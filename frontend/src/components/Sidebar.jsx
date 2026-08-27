@@ -10,7 +10,7 @@ const items = [
   { label: "Helpdesk & Requests", value: "helpdesk", icon: Headphones },
   { label: "Document & Policy", value: "documents", icon: FileText },
   { label: "Appraisal", value: "appraisals", icon: Star },
-  { label: "Reimbursement", value: "reimbursements", icon: HandCoins, roles: ["admin", "hr"] },
+  { label: "Reimbursement", value: "reimbursements", icon: HandCoins },
   { label: "Notifications", value: "notifications", icon: Bell }
 ];
 
