@@ -226,7 +226,7 @@ function App() {
                 <HrOperations activeSection={activeView} currentUser={user} users={users} />
               ) : null}
               {activeView === "notifications" ? <NotificationsPanel notifications={notifications} /> : null}
-              {activeView === "profile" ? <EmployeeIdCard user={user} /> : null}
+              {activeView === "profile" ? <EmployeeIdCard user={user} onUserUpdated={setUser} /> : null}
             </div>
           )}
         </section>
